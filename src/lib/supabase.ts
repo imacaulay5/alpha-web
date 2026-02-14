@@ -3,11 +3,7 @@ import { createBrowserClient } from '@supabase/ssr'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export function createClient() {
-  return createBrowserClient(supabaseUrl, supabaseAnonKey)
-}
-
-// For convenience, export a singleton instance for client components
+// Singleton instance for client-side usage
 let browserClient: ReturnType<typeof createBrowserClient> | null = null
 
 export function getSupabaseClient() {
@@ -17,5 +13,5 @@ export function getSupabaseClient() {
   return browserClient
 }
 
-// Legacy export for compatibility
-export const supabase = typeof window !== 'undefined' ? getSupabaseClient() : null!
+// Alias for compatibility
+export const createClient = getSupabaseClient

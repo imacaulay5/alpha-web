@@ -72,8 +72,8 @@ export default function DashboardPage() {
       icon: Clock,
       action: () => router.push('/time-entries'),
       capability: Capability.trackTime,
-      color: 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900',
-      iconColor: 'text-blue-600 dark:text-blue-400',
+      color: 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-950 dark:hover:bg-purple-900',
+      iconColor: 'text-purple-600 dark:text-purple-400',
     },
     {
       title: 'Create Invoice',
@@ -81,8 +81,8 @@ export default function DashboardPage() {
       icon: FileText,
       action: () => router.push('/invoices'),
       capability: Capability.createInvoices,
-      color: 'bg-green-50 hover:bg-green-100 dark:bg-green-950 dark:hover:bg-green-900',
-      iconColor: 'text-green-600 dark:text-green-400',
+      color: 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900',
+      iconColor: 'text-blue-600 dark:text-blue-400',
     },
     {
       title: 'Add Expense',
@@ -90,15 +90,15 @@ export default function DashboardPage() {
       icon: Receipt,
       action: () => router.push('/expenses'),
       capability: Capability.submitExpenses,
-      color: 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-950 dark:hover:bg-purple-900',
-      iconColor: 'text-purple-600 dark:text-purple-400',
+      color: 'bg-green-50 hover:bg-green-100 dark:bg-green-950 dark:hover:bg-green-900',
+      iconColor: 'text-green-600 dark:text-green-400',
     },
     {
-      title: 'New Project',
-      description: 'Start a new project',
-      icon: FolderKanban,
-      action: () => router.push('/projects'),
-      capability: Capability.createProjects,
+      title: 'Record Payment',
+      description: 'Log a payment received',
+      icon: DollarSign,
+      action: () => router.push('/invoices'),
+      capability: Capability.createInvoices,
       color: 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950 dark:hover:bg-orange-900',
       iconColor: 'text-orange-600 dark:text-orange-400',
     },
@@ -143,10 +143,10 @@ export default function DashboardPage() {
               Log Time
             </Button>
           )}
-          {hasCapability(Capability.createInvoices) && (
-            <Button onClick={() => router.push('/invoices')} variant="outline" className="gap-2">
-              <FileText className="w-4 h-4" />
-              New Invoice
+          {hasCapability(Capability.createProjects) && (
+            <Button onClick={() => router.push('/projects')} variant="outline" className="gap-2">
+              <FolderKanban className="w-4 h-4" />
+              New Project
             </Button>
           )}
         </div>
