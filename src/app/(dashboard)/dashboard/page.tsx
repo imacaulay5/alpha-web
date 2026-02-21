@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppState } from '@/contexts/AppStateContext'
 import { AccountType, Capability } from '@/types/enums'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   TrendingUp,
@@ -17,11 +16,11 @@ import {
   FolderKanban,
   CheckCircle,
   AlertCircle,
-  Plus,
   CreditCard,
   CalendarClock,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { getQuickActions } from '@/lib/quick-actions'
 
 // Personal account dashboard stats
 const personalStats = [
@@ -68,58 +67,7 @@ export default function DashboardPage() {
   }
 
   const stats = getStatsForAccountType()
-
-  const quickActions = [
-    {
-      title: 'Log Time',
-      description: 'Track your work hours',
-      icon: Clock,
-      action: () => router.push('/time-entries'),
-      capability: Capability.trackTime,
-      color: 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-950 dark:hover:bg-purple-900',
-      iconColor: 'text-purple-600 dark:text-purple-400',
-    },
-    {
-      title: 'Create Invoice',
-      description: 'Bill your clients',
-      icon: FileText,
-      action: () => router.push('/invoices'),
-      capability: Capability.createInvoices,
-      color: 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-    },
-    {
-      title: 'Pay Bill',
-      description: 'Record a bill payment',
-      icon: CreditCard,
-      action: () => router.push('/bills'),
-      capability: Capability.manageBillPayments,
-      color: 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900',
-      iconColor: 'text-blue-600 dark:text-blue-400',
-    },
-    {
-      title: 'Add Expense',
-      description: 'Record an expense',
-      icon: Receipt,
-      action: () => router.push('/expenses'),
-      capability: Capability.submitExpenses,
-      color: 'bg-green-50 hover:bg-green-100 dark:bg-green-950 dark:hover:bg-green-900',
-      iconColor: 'text-green-600 dark:text-green-400',
-    },
-    {
-      title: 'Record Payment',
-      description: 'Log a payment received',
-      icon: DollarSign,
-      action: () => router.push('/invoices'),
-      capability: Capability.recordPayments,
-      color: 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950 dark:hover:bg-orange-900',
-      iconColor: 'text-orange-600 dark:text-orange-400',
-    },
-  ]
-
-  const visibleQuickActions = quickActions.filter((action) =>
-    hasCapability(action.capability)
-  )
+  const quickActions = getQuickActions(accountType)
 
   const recentActivities = [
     { id: 1, message: 'Logged 4 hours on Project Alpha', time: '2 mins ago', status: 'success' },
@@ -142,54 +90,36 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Welcome back, {user?.name?.split(' ')[0] || 'there'}!
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {hasCapability(Capability.trackTime) && (
-            <Button onClick={() => router.push('/time-entries')} className="gap-2">
-              <Plus className="w-4 h-4" />
-              Log Time
-            </Button>
-          )}
-          {hasCapability(Capability.createProjects) && (
-            <Button onClick={() => router.push('/projects')} variant="outline" className="gap-2">
-              <FolderKanban className="w-4 h-4" />
-              New Project
-            </Button>
-          )}
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <p className="text-muted-foreground">
+          Welcome back, {user?.name?.split(' ')[0] || 'there'}!
+        </p>
       </div>
 
       {/* Quick Actions */}
-      {visibleQuickActions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {visibleQuickActions.map((action, index) => (
-                <button
-                  key={index}
-                  onClick={action.action}
-                  className={`p-4 rounded-lg border transition-all duration-200 hover:shadow-md text-left ${action.color}`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <action.icon className={`w-6 h-6 ${action.iconColor}`} />
-                  </div>
-                  <h3 className="font-medium mb-1">{action.title}</h3>
-                  <p className="text-sm opacity-80">{action.description}</p>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {quickActions.map((action) => (
+              <button
+                key={action.id}
+                onClick={() => router.push(action.href)}
+                className={`p-4 rounded-lg border transition-all duration-200 hover:shadow-md text-left ${action.cardBg}`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <action.icon className={`w-6 h-6 ${action.cardIconColor}`} />
+                </div>
+                <h3 className="font-medium mb-1">{action.label}</h3>
+                <p className="text-sm opacity-80">{action.description}</p>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       <div className={`grid grid-cols-1 md:grid-cols-2 ${stats.length > 2 ? 'lg:grid-cols-4' : ''} gap-6`}>

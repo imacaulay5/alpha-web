@@ -152,6 +152,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       if (tab.id === 'invoices' && user.account_type === AccountType.personal) {
         return false
       }
+      // Hide freelancer-focused tabs for business accounts
+      if (['time', 'projects', 'clients'].includes(tab.id) && user.account_type === AccountType.business) {
+        return false
+      }
       return true
     })
   }, [user, visibleTabs])
