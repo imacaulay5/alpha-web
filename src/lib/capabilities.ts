@@ -1,21 +1,25 @@
 import { Capability, AccountType, Role } from '@/types/enums'
 
-// Personal account capabilities (16 capabilities)
+// Personal account capabilities - bills/payments focused (no invoice creation)
 const personalCapabilities: Capability[] = [
-  Capability.quickBill,
+  // Bills & Payments
+  Capability.viewBills,
+  Capability.manageBillPayments,
+  Capability.trackRecurringBills,
   Capability.recordPayments,
-  Capability.createInvoices,
-  Capability.sendInvoices,
-  Capability.viewInvoices,
-  Capability.editInvoices,
+  Capability.quickBill,
+  // Expenses (simplified - just tracked/paid, no approval workflow)
   Capability.submitExpenses,
   Capability.viewOwnExpenses,
   Capability.categorizeExpenses,
   Capability.attachReceipts,
+  // Reports
   Capability.viewBasicReports,
   Capability.exportData,
+  // Tax
   Capability.viewTaxDashboard,
   Capability.exportTaxDocuments,
+  // Settings
   Capability.configureNotifications,
   Capability.customizeAppearance,
   Capability.exportAllData,

@@ -1,11 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { useAuth } from '@/contexts/AuthContext'
-import { getInvoices, createInvoice, updateInvoice, deleteInvoice, generateInvoiceNumber } from '@/services/invoices.service'
+import { useAppState } from '@/contexts/AppStateContext'
+import { getInvoices, getInvoice, createInvoice, updateInvoice, deleteInvoice, generateInvoiceNumber } from '@/services/invoices.service'
 import { getClients } from '@/services/clients.service'
 import type { Invoice, Client } from '@/types/models'
 import { InvoiceStatus, invoiceStatusLabels } from '@/types/enums'
+
+// Load PDF utilities client-side only (react-pdf doesn't support SSR)
+const PDFPreviewDialog = dynamic(() => import('@/components/PDFPreviewDialog'), { ssr: false })
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,7 +50,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Plus, FileText, Pencil, Trash2, Loader2, DollarSign, Send } from 'lucide-react'
+import { Plus, FileText, Pencil, Trash2, Loader2, DollarSign, Send, Download, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO, addDays } from 'date-fns'
 
@@ -73,6 +78,7 @@ interface LineItem {
 
 export default function InvoicesPage() {
   const { user } = useAuth()
+  const { organization } = useAppState()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
@@ -81,6 +87,9 @@ export default function InvoicesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [saving, setSaving] = useState(false)
+  const [pdfInvoice, setPdfInvoice] = useState<Invoice | null>(null)
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
+  const [loadingPdf, setLoadingPdf] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     client_id: '',
@@ -236,6 +245,41 @@ export default function InvoicesPage() {
     }
   }
 
+  const openPdfPreview = async (invoice: Invoice) => {
+    setLoadingPdf(invoice.id)
+    try {
+      const full = await getInvoice(invoice.id)
+      setPdfInvoice(full)
+      setPdfPreviewOpen(true)
+    } catch {
+      toast.error('Failed to load invoice details')
+    } finally {
+      setLoadingPdf(null)
+    }
+  }
+
+  const handleDownloadPdf = async (invoice: Invoice) => {
+    setLoadingPdf(invoice.id)
+    try {
+      const full = await getInvoice(invoice.id)
+      if (!full) return
+      const { pdf } = await import('@react-pdf/renderer')
+      const { InvoicePDF } = await import('@/components/InvoicePDF')
+      const blob = await pdf(<InvoicePDF invoice={full} organization={organization} />).toBlob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `invoice-${invoice.invoice_number}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('PDF downloaded')
+    } catch {
+      toast.error('Failed to generate PDF')
+    } finally {
+      setLoadingPdf(null)
+    }
+  }
+
   // Calculate totals
   const totalOutstanding = invoices
     .filter(i => i.status === InvoiceStatus.sent || i.status === InvoiceStatus.overdue)
@@ -383,6 +427,27 @@ export default function InvoicesPage() {
                           <Send className="w-4 h-4" />
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openPdfPreview(invoice)}
+                        title="Preview PDF"
+                        disabled={loadingPdf === invoice.id}
+                      >
+                        {loadingPdf === invoice.id
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Eye className="w-4 h-4" />
+                        }
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDownloadPdf(invoice)}
+                        title="Download PDF"
+                        disabled={loadingPdf === invoice.id}
+                      >
+                        <Download className="w-4 h-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -584,6 +649,16 @@ export default function InvoicesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* PDF Preview */}
+      {pdfPreviewOpen && pdfInvoice && (
+        <PDFPreviewDialog
+          invoice={pdfInvoice}
+          organization={organization}
+          open={pdfPreviewOpen}
+          onOpenChange={setPdfPreviewOpen}
+        />
+      )}
     </div>
   )
 }

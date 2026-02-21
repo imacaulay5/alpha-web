@@ -1,0 +1,779 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
+import { useAppState } from '@/contexts/AppStateContext'
+
+// Personal bills
+import { getBills, createBill, updateBill, deleteBill, markBillPaid } from '@/services/bills.service'
+import type { Bill } from '@/types/models'
+import {
+  BillStatus,
+  BillCategory,
+  BillRecurrence,
+  billStatusLabels,
+  billCategoryLabels,
+  billRecurrenceLabels,
+} from '@/types/enums'
+
+// AP (vendor bills + vendors + POs)
+import {
+  getVendors,
+  createVendor,
+  updateVendor,
+  deleteVendor,
+  getVendorBills,
+  createVendorBill,
+  deleteVendorBill,
+  markVendorBillPaid,
+  generateBillNumber,
+  getPurchaseOrders,
+  createPurchaseOrder,
+  deletePurchaseOrder,
+  generatePONumber,
+  updatePurchaseOrder,
+} from '@/services/accounts-payable.service'
+import type { Vendor, VendorBill, PurchaseOrder } from '@/types/models'
+import {
+  AccountType,
+  Capability,
+  VendorStatus,
+  vendorStatusLabels,
+  PurchaseOrderStatus,
+  purchaseOrderStatusLabels,
+} from '@/types/enums'
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Plus,
+  CreditCard,
+  Pencil,
+  Trash2,
+  Loader2,
+  DollarSign,
+  CheckCircle,
+  CalendarClock,
+  AlertCircle,
+  RotateCcw,
+  Building2,
+  FileStack,
+  ShoppingCart,
+  Send,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { format, parseISO, differenceInDays, addDays } from 'date-fns'
+
+// ─── Helpers ──────────────────────────────────────────────────
+
+function formatCurrency(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+}
+
+function getBillStatusVariant(status: BillStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
+  switch (status) {
+    case BillStatus.paid: return 'default'
+    case BillStatus.due: return 'secondary'
+    case BillStatus.overdue: return 'destructive'
+    case BillStatus.cancelled: return 'outline'
+    default: return 'secondary'
+  }
+}
+
+function getPOStatusVariant(status: PurchaseOrderStatus): 'default' | 'secondary' | 'outline' | 'destructive' {
+  switch (status) {
+    case PurchaseOrderStatus.received: return 'default'
+    case PurchaseOrderStatus.sent: return 'secondary'
+    case PurchaseOrderStatus.cancelled: return 'outline'
+    default: return 'secondary'
+  }
+}
+
+interface LineItemRow { description: string; quantity: number; rate: number; amount: number }
+
+// ─────────────────────────────────────────────────────────────
+// PERSONAL BILLS VIEW
+// ─────────────────────────────────────────────────────────────
+
+function PersonalBillsView() {
+  const { user } = useAuth()
+  const [bills, setBills] = useState<Bill[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [selectedBill, setSelectedBill] = useState<Bill | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState('upcoming')
+
+  const [formData, setFormData] = useState({
+    name: '', payee: '', amount: '',
+    category: BillCategory.other,
+    due_date: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
+    recurrence: BillRecurrence.monthly,
+    auto_pay: false, notes: '',
+  })
+
+  useEffect(() => { loadData() }, [])
+
+  const loadData = async () => {
+    try {
+      setError(null)
+      setBills(await getBills())
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load data'
+      setError(msg); toast.error(msg)
+    } finally { setLoading(false) }
+  }
+
+  const openCreate = () => {
+    setSelectedBill(null)
+    setFormData({ name: '', payee: '', amount: '', category: BillCategory.other, due_date: format(addDays(new Date(), 30), 'yyyy-MM-dd'), recurrence: BillRecurrence.monthly, auto_pay: false, notes: '' })
+    setDialogOpen(true)
+  }
+
+  const openEdit = (bill: Bill) => {
+    setSelectedBill(bill)
+    setFormData({ name: bill.name, payee: bill.payee, amount: bill.amount.toString(), category: bill.category, due_date: bill.due_date, recurrence: bill.recurrence, auto_pay: bill.auto_pay, notes: bill.notes || '' })
+    setDialogOpen(true)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault(); setSaving(true)
+    try {
+      const data = { user_id: user?.id!, name: formData.name, payee: formData.payee, amount: parseFloat(formData.amount), currency: 'USD', category: formData.category, due_date: formData.due_date, status: BillStatus.upcoming, recurrence: formData.recurrence, auto_pay: formData.auto_pay, notes: formData.notes || undefined }
+      if (selectedBill) { await updateBill(selectedBill.id, data); toast.success('Bill updated') }
+      else { await createBill(data); toast.success('Bill added') }
+      setDialogOpen(false); loadData()
+    } catch { toast.error('Failed to save bill') }
+    finally { setSaving(false) }
+  }
+
+  const handleDelete = async () => {
+    if (!selectedBill) return
+    try { await deleteBill(selectedBill.id); toast.success('Bill deleted'); setDeleteDialogOpen(false); loadData() }
+    catch { toast.error('Failed to delete bill') }
+  }
+
+  const handleMarkPaid = async (bill: Bill) => {
+    try { await markBillPaid(bill.id); toast.success('Marked as paid'); loadData() }
+    catch { toast.error('Failed to update bill') }
+  }
+
+  const unpaid = bills.filter(b => b.status !== BillStatus.paid && b.status !== BillStatus.cancelled)
+  const paid = bills.filter(b => b.status === BillStatus.paid)
+  const overdue = bills.filter(b => b.status === BillStatus.overdue)
+  const recurring = bills.filter(b => b.recurrence !== BillRecurrence.once)
+
+  const getDaysLabel = (dueDate: string) => {
+    const d = differenceInDays(parseISO(dueDate), new Date())
+    if (d < 0) return `${Math.abs(d)}d overdue`
+    if (d === 0) return 'Due today'
+    return `${d}d left`
+  }
+
+  const filtered = activeTab === 'upcoming' ? unpaid : activeTab === 'paid' ? paid : activeTab === 'recurring' ? recurring : bills
+
+  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+  if (error) return <div className="p-6"><Card><CardContent className="text-center py-12"><p className="text-destructive">{error}</p><Button onClick={loadData} className="mt-4">Try Again</Button></CardContent></Card></div>
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <div><h1 className="text-2xl font-bold">Bills & Payments</h1><p className="text-muted-foreground">Track your bills and payment history</p></div>
+        <Button onClick={openCreate} className="gap-2"><Plus className="w-4 h-4" />Add Bill</Button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Due</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(unpaid.reduce((s, b) => s + b.amount, 0))}</div><p className="text-xs text-muted-foreground">{unpaid.length} unpaid</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Paid This Month</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(paid.reduce((s, b) => s + b.amount, 0))}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-destructive">Overdue</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{overdue.length}</div></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Recurring</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{recurring.length}</div></CardContent></Card>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="upcoming" className="gap-2"><CalendarClock className="w-4 h-4" />Upcoming ({unpaid.length})</TabsTrigger>
+          <TabsTrigger value="paid" className="gap-2"><CheckCircle className="w-4 h-4" />Paid ({paid.length})</TabsTrigger>
+          <TabsTrigger value="recurring" className="gap-2"><RotateCcw className="w-4 h-4" />Recurring ({recurring.length})</TabsTrigger>
+          <TabsTrigger value="all">All ({bills.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value={activeTab} className="mt-4">
+          {filtered.length === 0 ? (
+            <Card><CardContent className="text-center py-12"><CreditCard className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" /><p className="text-muted-foreground">No bills found</p>{activeTab === 'upcoming' && <Button onClick={openCreate} className="mt-4 gap-2"><Plus className="w-4 h-4" />Add Bill</Button>}</CardContent></Card>
+          ) : (
+            <Card><CardContent className="pt-6">
+              <Table>
+                <TableHeader><TableRow><TableHead>Bill</TableHead><TableHead>Payee</TableHead><TableHead>Category</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead><TableHead>Recurrence</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {filtered.map(bill => (
+                    <TableRow key={bill.id}>
+                      <TableCell className="font-medium">{bill.name}</TableCell>
+                      <TableCell>{bill.payee}</TableCell>
+                      <TableCell><Badge variant="outline">{billCategoryLabels[bill.category]}</Badge></TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span>{format(parseISO(bill.due_date), 'MMM d, yyyy')}</span>
+                          {bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled && (
+                            <span className={`text-xs ${differenceInDays(parseISO(bill.due_date), new Date()) < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>{getDaysLabel(bill.due_date)}</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">{formatCurrency(bill.amount)}</TableCell>
+                      <TableCell><Badge variant={getBillStatusVariant(bill.status)}>{billStatusLabels[bill.status]}</Badge></TableCell>
+                      <TableCell><span className="text-sm text-muted-foreground">{billRecurrenceLabels[bill.recurrence]}</span></TableCell>
+                      <TableCell className="text-right">
+                        {bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled && (
+                          <Button variant="ghost" size="icon" title="Mark Paid" onClick={() => handleMarkPaid(bill)}><CheckCircle className="w-4 h-4 text-green-600" /></Button>
+                        )}
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(bill)}><Pencil className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => { setSelectedBill(bill); setDeleteDialogOpen(true) }}><Trash2 className="w-4 h-4" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent></Card>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{selectedBill ? 'Edit Bill' : 'Add Bill'}</DialogTitle><DialogDescription>{selectedBill ? 'Update bill details' : 'Add a new bill to track'}</DialogDescription></DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Bill Name *</Label><Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="e.g. Electric Bill" required /></div>
+                <div className="space-y-2"><Label>Payee *</Label><Input value={formData.payee} onChange={e => setFormData({ ...formData, payee: e.target.value })} placeholder="e.g. Con Edison" required /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Amount *</Label><Input type="number" step="0.01" value={formData.amount} onChange={e => setFormData({ ...formData, amount: e.target.value })} required /></div>
+                <div className="space-y-2"><Label>Category</Label>
+                  <Select value={formData.category} onValueChange={v => setFormData({ ...formData, category: v as BillCategory })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{Object.entries(billCategoryLabels).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Due Date *</Label><Input type="date" value={formData.due_date} onChange={e => setFormData({ ...formData, due_date: e.target.value })} required /></div>
+                <div className="space-y-2"><Label>Recurrence</Label>
+                  <Select value={formData.recurrence} onValueChange={v => setFormData({ ...formData, recurrence: v as BillRecurrence })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{Object.entries(billRecurrenceLabels).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="auto_pay" checked={formData.auto_pay} onChange={e => setFormData({ ...formData, auto_pay: e.target.checked })} className="rounded" />
+                <Label htmlFor="auto_pay" className="text-sm font-normal">Auto-pay enabled</Label>
+              </div>
+              <div className="space-y-2"><Label>Notes</Label><Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} rows={2} /></div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{selectedBill ? 'Save Changes' : 'Add Bill'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Delete Bill</AlertDialogTitle><AlertDialogDescription>Delete &quot;{selectedBill?.name}&quot;? This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// ACCOUNTS PAYABLE VIEW (Freelancer / Business)
+// ─────────────────────────────────────────────────────────────
+
+function AccountsPayableView() {
+  const { user } = useAuth()
+  const { hasCapability } = useAppState()
+  const canManageVendors = hasCapability(Capability.manageVendors)
+  const canManageBills = hasCapability(Capability.manageBills)
+  const canCreatePOs = hasCapability(Capability.createPurchaseOrders)
+
+  const [vendors, setVendors] = useState<Vendor[]>([])
+  const [bills, setBills] = useState<VendorBill[]>([])
+  const [pos, setPOs] = useState<PurchaseOrder[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Vendor dialog
+  const [vendorDialog, setVendorDialog] = useState(false)
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null)
+  const [vendorForm, setVendorForm] = useState({ name: '', email: '', phone: '', contact_name: '', address: '', city: '', state: '', country: 'US', tax_id: '', payment_terms: '30', notes: '' })
+  const [savingVendor, setSavingVendor] = useState(false)
+
+  // Bill dialog
+  const [billDialog, setBillDialog] = useState(false)
+  const [savingBill, setSavingBill] = useState(false)
+  const [billForm, setBillForm] = useState({ vendor_id: '', bill_number: '', issue_date: format(new Date(), 'yyyy-MM-dd'), due_date: format(addDays(new Date(), 30), 'yyyy-MM-dd'), tax_rate: '0', notes: '' })
+  const [billLines, setBillLines] = useState<LineItemRow[]>([{ description: '', quantity: 1, rate: 0, amount: 0 }])
+
+  // PO dialog
+  const [poDialog, setPODialog] = useState(false)
+  const [savingPO, setSavingPO] = useState(false)
+  const [poForm, setPOForm] = useState({ vendor_id: '', po_number: '', date: format(new Date(), 'yyyy-MM-dd'), expected_date: '', tax_rate: '0', notes: '' })
+  const [poLines, setPOLines] = useState<LineItemRow[]>([{ description: '', quantity: 1, rate: 0, amount: 0 }])
+
+  // Delete
+  const [deleteDialog, setDeleteDialog] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'vendor' | 'bill' | 'po'; id: string; label: string } | null>(null)
+
+  useEffect(() => { loadData() }, [])
+
+  const loadData = async () => {
+    try {
+      setError(null)
+      const [v, b, p] = await Promise.all([getVendors(), getVendorBills(), getPurchaseOrders()])
+      setVendors(v); setBills(b); setPOs(p)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load data'
+      setError(msg); toast.error(msg)
+    } finally { setLoading(false) }
+  }
+
+  // ── Vendor handlers ──
+
+  const openCreateVendor = () => {
+    setSelectedVendor(null)
+    setVendorForm({ name: '', email: '', phone: '', contact_name: '', address: '', city: '', state: '', country: 'US', tax_id: '', payment_terms: '30', notes: '' })
+    setVendorDialog(true)
+  }
+
+  const openEditVendor = (v: Vendor) => {
+    setSelectedVendor(v)
+    setVendorForm({ name: v.name, email: v.email || '', phone: v.phone || '', contact_name: v.contact_name || '', address: v.address || '', city: v.city || '', state: v.state || '', country: v.country || 'US', tax_id: v.tax_id || '', payment_terms: v.payment_terms?.toString() || '30', notes: v.notes || '' })
+    setVendorDialog(true)
+  }
+
+  const handleSaveVendor = async (e: React.FormEvent) => {
+    e.preventDefault(); setSavingVendor(true)
+    try {
+      const input = { user_id: user?.id, organization_id: user?.organization_id, name: vendorForm.name, email: vendorForm.email || undefined, phone: vendorForm.phone || undefined, contact_name: vendorForm.contact_name || undefined, address: vendorForm.address || undefined, city: vendorForm.city || undefined, state: vendorForm.state || undefined, country: vendorForm.country || undefined, tax_id: vendorForm.tax_id || undefined, payment_terms: parseInt(vendorForm.payment_terms) || 30, notes: vendorForm.notes || undefined, status: VendorStatus.active }
+      if (selectedVendor) { await updateVendor(selectedVendor.id, input); toast.success('Vendor updated') }
+      else { await createVendor(input); toast.success('Vendor created') }
+      setVendorDialog(false); loadData()
+    } catch { toast.error('Failed to save vendor') }
+    finally { setSavingVendor(false) }
+  }
+
+  // ── Bill line item helpers ──
+
+  const updateBillLine = (i: number, field: keyof LineItemRow, val: string | number) => {
+    const lines = [...billLines]
+    lines[i] = { ...lines[i], [field]: val }
+    if (field === 'quantity' || field === 'rate') lines[i].amount = lines[i].quantity * lines[i].rate
+    setBillLines(lines)
+  }
+
+  const billSubtotal = billLines.reduce((s, l) => s + l.amount, 0)
+  const billTaxAmt = billSubtotal * (parseFloat(billForm.tax_rate) / 100 || 0)
+  const billTotal = billSubtotal + billTaxAmt
+
+  // ── Bill handlers ──
+
+  const openCreateBill = async () => {
+    const num = await generateBillNumber()
+    setBillForm({ vendor_id: '', bill_number: num, issue_date: format(new Date(), 'yyyy-MM-dd'), due_date: format(addDays(new Date(), 30), 'yyyy-MM-dd'), tax_rate: '0', notes: '' })
+    setBillLines([{ description: '', quantity: 1, rate: 0, amount: 0 }])
+    setBillDialog(true)
+  }
+
+  const handleSaveBill = async (e: React.FormEvent) => {
+    e.preventDefault(); setSavingBill(true)
+    try {
+      const input = { user_id: user?.id, organization_id: user?.organization_id, vendor_id: billForm.vendor_id, bill_number: billForm.bill_number, issue_date: billForm.issue_date, due_date: billForm.due_date, subtotal: billSubtotal, tax_rate: parseFloat(billForm.tax_rate) || 0, tax_amount: billTaxAmt, total: billTotal, currency: 'USD', status: BillStatus.upcoming, notes: billForm.notes || undefined }
+      const lines = billLines.filter(l => l.description).map((l, i) => ({ ...l, order: i }))
+      await createVendorBill(input as any, lines)
+      toast.success('Bill created'); setBillDialog(false); loadData()
+    } catch { toast.error('Failed to save bill') }
+    finally { setSavingBill(false) }
+  }
+
+  // ── PO line item helpers ──
+
+  const updatePOLine = (i: number, field: keyof LineItemRow, val: string | number) => {
+    const lines = [...poLines]
+    lines[i] = { ...lines[i], [field]: val }
+    if (field === 'quantity' || field === 'rate') lines[i].amount = lines[i].quantity * lines[i].rate
+    setPOLines(lines)
+  }
+
+  const poSubtotal = poLines.reduce((s, l) => s + l.amount, 0)
+  const poTaxAmt = poSubtotal * (parseFloat(poForm.tax_rate) / 100 || 0)
+  const poTotal = poSubtotal + poTaxAmt
+
+  // ── PO handlers ──
+
+  const openCreatePO = async () => {
+    const num = await generatePONumber()
+    setPOForm({ vendor_id: '', po_number: num, date: format(new Date(), 'yyyy-MM-dd'), expected_date: '', tax_rate: '0', notes: '' })
+    setPOLines([{ description: '', quantity: 1, rate: 0, amount: 0 }])
+    setPODialog(true)
+  }
+
+  const handleSavePO = async (e: React.FormEvent) => {
+    e.preventDefault(); setSavingPO(true)
+    try {
+      const input = { user_id: user?.id, organization_id: user?.organization_id, vendor_id: poForm.vendor_id, po_number: poForm.po_number, date: poForm.date, expected_date: poForm.expected_date || undefined, subtotal: poSubtotal, tax_rate: parseFloat(poForm.tax_rate) || 0, tax_amount: poTaxAmt, total: poTotal, currency: 'USD', status: PurchaseOrderStatus.draft, notes: poForm.notes || undefined }
+      const lines = poLines.filter(l => l.description).map((l, i) => ({ ...l, order: i }))
+      await createPurchaseOrder(input as any, lines)
+      toast.success('PO created'); setPODialog(false); loadData()
+    } catch { toast.error('Failed to save PO') }
+    finally { setSavingPO(false) }
+  }
+
+  const handlePOStatusChange = async (po: PurchaseOrder, status: PurchaseOrderStatus) => {
+    try { await updatePurchaseOrder(po.id, { status }); toast.success('PO updated'); loadData() }
+    catch { toast.error('Failed to update PO') }
+  }
+
+  // ── Delete ──
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      if (deleteTarget.type === 'vendor') await deleteVendor(deleteTarget.id)
+      else if (deleteTarget.type === 'bill') await deleteVendorBill(deleteTarget.id)
+      else await deletePurchaseOrder(deleteTarget.id)
+      toast.success('Deleted'); setDeleteDialog(false); loadData()
+    } catch { toast.error('Failed to delete') }
+  }
+
+  // ── Computed ──
+
+  const unpaidBills = bills.filter(b => b.status !== BillStatus.paid && b.status !== BillStatus.cancelled)
+  const overdueBills = bills.filter(b => {
+    if (b.status === BillStatus.paid || b.status === BillStatus.cancelled) return false
+    return differenceInDays(parseISO(b.due_date), new Date()) < 0
+  })
+  const totalOutstanding = unpaidBills.reduce((s, b) => s + b.total, 0)
+
+  if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+  if (error) return <div className="p-6"><Card><CardContent className="text-center py-12"><p className="text-destructive">{error}</p><Button onClick={loadData} className="mt-4">Try Again</Button></CardContent></Card></div>
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Bills & Vendors</h1>
+        <p className="text-muted-foreground">Accounts payable — vendor management, bills, and purchase orders</p>
+      </div>
+
+      {/* Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Vendors</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{vendors.length}</div><p className="text-xs text-muted-foreground">{vendors.filter(v => v.status === VendorStatus.active).length} active</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Outstanding</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{formatCurrency(totalOutstanding)}</div><p className="text-xs text-muted-foreground">{unpaidBills.length} unpaid bills</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-destructive">Overdue</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{overdueBills.length}</div><p className="text-xs text-muted-foreground">past due date</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Open POs</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{pos.filter(p => p.status !== PurchaseOrderStatus.received && p.status !== PurchaseOrderStatus.cancelled).length}</div></CardContent></Card>
+      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="bills">
+        <TabsList>
+          <TabsTrigger value="bills" className="gap-2"><FileStack className="w-4 h-4" />Bills ({bills.length})</TabsTrigger>
+          <TabsTrigger value="vendors" className="gap-2"><Building2 className="w-4 h-4" />Vendors ({vendors.length})</TabsTrigger>
+          {canCreatePOs && <TabsTrigger value="pos" className="gap-2"><ShoppingCart className="w-4 h-4" />Purchase Orders ({pos.length})</TabsTrigger>}
+        </TabsList>
+
+        {/* ── Bills Tab ── */}
+        <TabsContent value="bills" className="mt-4 space-y-4">
+          <div className="flex justify-end">
+            {canManageBills && <Button onClick={openCreateBill} className="gap-2"><Plus className="w-4 h-4" />New Bill</Button>}
+          </div>
+          {bills.length === 0 ? (
+            <Card><CardContent className="text-center py-12"><FileStack className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" /><p className="text-muted-foreground">No vendor bills yet</p>{canManageBills && <Button onClick={openCreateBill} className="mt-4 gap-2"><Plus className="w-4 h-4" />New Bill</Button>}</CardContent></Card>
+          ) : (
+            <Card><CardContent className="pt-6">
+              <Table>
+                <TableHeader><TableRow><TableHead>Bill #</TableHead><TableHead>Vendor</TableHead><TableHead>Issue Date</TableHead><TableHead>Due Date</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {bills.map(bill => {
+                    const daysLeft = differenceInDays(parseISO(bill.due_date), new Date())
+                    const isPastDue = daysLeft < 0 && bill.status !== BillStatus.paid
+                    return (
+                      <TableRow key={bill.id}>
+                        <TableCell className="font-mono font-medium">{bill.bill_number}</TableCell>
+                        <TableCell>{bill.vendor?.name || '—'}</TableCell>
+                        <TableCell>{format(parseISO(bill.issue_date), 'MMM d, yyyy')}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span>{format(parseISO(bill.due_date), 'MMM d, yyyy')}</span>
+                            {isPastDue && <span className="text-xs text-destructive">{Math.abs(daysLeft)}d overdue</span>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(bill.total)}</TableCell>
+                        <TableCell><Badge variant={getBillStatusVariant(bill.status)}>{billStatusLabels[bill.status]}</Badge></TableCell>
+                        <TableCell className="text-right">
+                          {bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled && canManageBills && (
+                            <Button variant="ghost" size="icon" title="Mark Paid" onClick={() => markVendorBillPaid(bill.id).then(() => { toast.success('Marked as paid'); loadData() })}><CheckCircle className="w-4 h-4 text-green-600" /></Button>
+                          )}
+                          {canManageBills && <Button variant="ghost" size="icon" onClick={() => { setDeleteTarget({ type: 'bill', id: bill.id, label: bill.bill_number }); setDeleteDialog(true) }}><Trash2 className="w-4 h-4" /></Button>}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent></Card>
+          )}
+        </TabsContent>
+
+        {/* ── Vendors Tab ── */}
+        <TabsContent value="vendors" className="mt-4 space-y-4">
+          <div className="flex justify-end">
+            {canManageVendors && <Button onClick={openCreateVendor} className="gap-2"><Plus className="w-4 h-4" />New Vendor</Button>}
+          </div>
+          {vendors.length === 0 ? (
+            <Card><CardContent className="text-center py-12"><Building2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" /><p className="text-muted-foreground">No vendors yet</p>{canManageVendors && <Button onClick={openCreateVendor} className="mt-4 gap-2"><Plus className="w-4 h-4" />New Vendor</Button>}</CardContent></Card>
+          ) : (
+            <Card><CardContent className="pt-6">
+              <Table>
+                <TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead>Contact</TableHead><TableHead>Email</TableHead><TableHead>Phone</TableHead><TableHead>Payment Terms</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {vendors.map(v => (
+                    <TableRow key={v.id}>
+                      <TableCell className="font-medium">{v.name}</TableCell>
+                      <TableCell>{v.contact_name || '—'}</TableCell>
+                      <TableCell>{v.email || '—'}</TableCell>
+                      <TableCell>{v.phone || '—'}</TableCell>
+                      <TableCell>{v.payment_terms ? `Net ${v.payment_terms}` : '—'}</TableCell>
+                      <TableCell><Badge variant={v.status === VendorStatus.active ? 'default' : 'outline'}>{vendorStatusLabels[v.status]}</Badge></TableCell>
+                      <TableCell className="text-right">
+                        {canManageVendors && <>
+                          <Button variant="ghost" size="icon" onClick={() => openEditVendor(v)}><Pencil className="w-4 h-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => { setDeleteTarget({ type: 'vendor', id: v.id, label: v.name }); setDeleteDialog(true) }}><Trash2 className="w-4 h-4" /></Button>
+                        </>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent></Card>
+          )}
+        </TabsContent>
+
+        {/* ── Purchase Orders Tab ── */}
+        {canCreatePOs && (
+          <TabsContent value="pos" className="mt-4 space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={openCreatePO} className="gap-2"><Plus className="w-4 h-4" />New PO</Button>
+            </div>
+            {pos.length === 0 ? (
+              <Card><CardContent className="text-center py-12"><ShoppingCart className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" /><p className="text-muted-foreground">No purchase orders yet</p><Button onClick={openCreatePO} className="mt-4 gap-2"><Plus className="w-4 h-4" />New PO</Button></CardContent></Card>
+            ) : (
+              <Card><CardContent className="pt-6">
+                <Table>
+                  <TableHeader><TableRow><TableHead>PO #</TableHead><TableHead>Vendor</TableHead><TableHead>Date</TableHead><TableHead>Expected</TableHead><TableHead className="text-right">Total</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {pos.map(po => (
+                      <TableRow key={po.id}>
+                        <TableCell className="font-mono font-medium">{po.po_number}</TableCell>
+                        <TableCell>{po.vendor?.name || '—'}</TableCell>
+                        <TableCell>{format(parseISO(po.date), 'MMM d, yyyy')}</TableCell>
+                        <TableCell>{po.expected_date ? format(parseISO(po.expected_date), 'MMM d, yyyy') : '—'}</TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(po.total)}</TableCell>
+                        <TableCell><Badge variant={getPOStatusVariant(po.status)}>{purchaseOrderStatusLabels[po.status]}</Badge></TableCell>
+                        <TableCell className="text-right">
+                          {po.status === PurchaseOrderStatus.draft && <Button variant="ghost" size="icon" title="Mark Sent" onClick={() => handlePOStatusChange(po, PurchaseOrderStatus.sent)}><Send className="w-4 h-4" /></Button>}
+                          {po.status === PurchaseOrderStatus.sent && <Button variant="ghost" size="icon" title="Mark Received" onClick={() => handlePOStatusChange(po, PurchaseOrderStatus.received)}><CheckCircle className="w-4 h-4 text-green-600" /></Button>}
+                          <Button variant="ghost" size="icon" onClick={() => { setDeleteTarget({ type: 'po', id: po.id, label: po.po_number }); setDeleteDialog(true) }}><Trash2 className="w-4 h-4" /></Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent></Card>
+            )}
+          </TabsContent>
+        )}
+      </Tabs>
+
+      {/* ── Vendor Dialog ── */}
+      <Dialog open={vendorDialog} onOpenChange={setVendorDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{selectedVendor ? 'Edit Vendor' : 'New Vendor'}</DialogTitle><DialogDescription>Manage vendor contact and payment information</DialogDescription></DialogHeader>
+          <form onSubmit={handleSaveVendor}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 col-span-2"><Label>Vendor Name *</Label><Input value={vendorForm.name} onChange={e => setVendorForm({ ...vendorForm, name: e.target.value })} required /></div>
+                <div className="space-y-2"><Label>Email</Label><Input type="email" value={vendorForm.email} onChange={e => setVendorForm({ ...vendorForm, email: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Phone</Label><Input value={vendorForm.phone} onChange={e => setVendorForm({ ...vendorForm, phone: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Contact Name</Label><Input value={vendorForm.contact_name} onChange={e => setVendorForm({ ...vendorForm, contact_name: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Tax ID / EIN</Label><Input value={vendorForm.tax_id} onChange={e => setVendorForm({ ...vendorForm, tax_id: e.target.value })} /></div>
+                <div className="space-y-2"><Label>City</Label><Input value={vendorForm.city} onChange={e => setVendorForm({ ...vendorForm, city: e.target.value })} /></div>
+                <div className="space-y-2"><Label>State</Label><Input value={vendorForm.state} onChange={e => setVendorForm({ ...vendorForm, state: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Payment Terms (days)</Label><Input type="number" value={vendorForm.payment_terms} onChange={e => setVendorForm({ ...vendorForm, payment_terms: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Country</Label><Input value={vendorForm.country} onChange={e => setVendorForm({ ...vendorForm, country: e.target.value })} /></div>
+                <div className="space-y-2 col-span-2"><Label>Notes</Label><Textarea value={vendorForm.notes} onChange={e => setVendorForm({ ...vendorForm, notes: e.target.value })} rows={2} /></div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setVendorDialog(false)}>Cancel</Button>
+              <Button type="submit" disabled={savingVendor}>{savingVendor && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{selectedVendor ? 'Save Changes' : 'Create Vendor'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bill Dialog ── */}
+      <Dialog open={billDialog} onOpenChange={setBillDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>New Vendor Bill</DialogTitle><DialogDescription>Record a bill received from a vendor</DialogDescription></DialogHeader>
+          <form onSubmit={handleSaveBill}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Bill Number</Label><Input value={billForm.bill_number} readOnly className="bg-muted" /></div>
+                <div className="space-y-2"><Label>Vendor *</Label>
+                  <Select value={billForm.vendor_id} onValueChange={v => setBillForm({ ...billForm, vendor_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select vendor" /></SelectTrigger>
+                    <SelectContent>{vendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2"><Label>Issue Date</Label><Input type="date" value={billForm.issue_date} onChange={e => setBillForm({ ...billForm, issue_date: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Due Date *</Label><Input type="date" value={billForm.due_date} onChange={e => setBillForm({ ...billForm, due_date: e.target.value })} required /></div>
+                <div className="space-y-2"><Label>Tax Rate (%)</Label><Input type="number" step="0.01" value={billForm.tax_rate} onChange={e => setBillForm({ ...billForm, tax_rate: e.target.value })} /></div>
+              </div>
+              {/* Line items */}
+              <div className="space-y-2">
+                <Label>Items</Label>
+                <div className="border rounded-lg p-3 space-y-2">
+                  <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground"><div className="col-span-5">Description</div><div className="col-span-2">Qty</div><div className="col-span-2">Rate</div><div className="col-span-2 text-right">Amount</div><div className="col-span-1" /></div>
+                  {billLines.map((line, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-5"><Input className="h-8 text-xs" value={line.description} onChange={e => updateBillLine(i, 'description', e.target.value)} placeholder="Description" /></div>
+                      <div className="col-span-2"><Input className="h-8 text-xs" type="number" value={line.quantity} onChange={e => updateBillLine(i, 'quantity', parseFloat(e.target.value) || 0)} /></div>
+                      <div className="col-span-2"><Input className="h-8 text-xs" type="number" step="0.01" value={line.rate} onChange={e => updateBillLine(i, 'rate', parseFloat(e.target.value) || 0)} /></div>
+                      <div className="col-span-2 text-right text-sm font-medium">{formatCurrency(line.amount)}</div>
+                      <div className="col-span-1"><Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setBillLines(billLines.filter((_, j) => j !== i))} disabled={billLines.length <= 1}><Trash2 className="w-3 h-3" /></Button></div>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" size="sm" onClick={() => setBillLines([...billLines, { description: '', quantity: 1, rate: 0, amount: 0 }])}><Plus className="w-3 h-3 mr-1" />Add Line</Button>
+                  <div className="border-t pt-2 space-y-1 text-sm">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(billSubtotal)}</span></div>
+                    {parseFloat(billForm.tax_rate) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Tax ({billForm.tax_rate}%)</span><span>{formatCurrency(billTaxAmt)}</span></div>}
+                    <div className="flex justify-between font-semibold"><span>Total</span><span>{formatCurrency(billTotal)}</span></div>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2"><Label>Notes</Label><Textarea value={billForm.notes} onChange={e => setBillForm({ ...billForm, notes: e.target.value })} rows={2} /></div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setBillDialog(false)}>Cancel</Button>
+              <Button type="submit" disabled={savingBill || !billForm.vendor_id}>{savingBill && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create Bill</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── PO Dialog ── */}
+      <Dialog open={poDialog} onOpenChange={setPODialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>New Purchase Order</DialogTitle><DialogDescription>Create a purchase order for a vendor</DialogDescription></DialogHeader>
+          <form onSubmit={handleSavePO}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>PO Number</Label><Input value={poForm.po_number} readOnly className="bg-muted" /></div>
+                <div className="space-y-2"><Label>Vendor *</Label>
+                  <Select value={poForm.vendor_id} onValueChange={v => setPOForm({ ...poForm, vendor_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select vendor" /></SelectTrigger>
+                    <SelectContent>{vendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2"><Label>Order Date</Label><Input type="date" value={poForm.date} onChange={e => setPOForm({ ...poForm, date: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Expected Delivery</Label><Input type="date" value={poForm.expected_date} onChange={e => setPOForm({ ...poForm, expected_date: e.target.value })} /></div>
+              </div>
+              {/* PO Line items */}
+              <div className="space-y-2">
+                <Label>Items</Label>
+                <div className="border rounded-lg p-3 space-y-2">
+                  <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground"><div className="col-span-5">Description</div><div className="col-span-2">Qty</div><div className="col-span-2">Rate</div><div className="col-span-2 text-right">Amount</div><div className="col-span-1" /></div>
+                  {poLines.map((line, i) => (
+                    <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-5"><Input className="h-8 text-xs" value={line.description} onChange={e => updatePOLine(i, 'description', e.target.value)} placeholder="Item or service" /></div>
+                      <div className="col-span-2"><Input className="h-8 text-xs" type="number" value={line.quantity} onChange={e => updatePOLine(i, 'quantity', parseFloat(e.target.value) || 0)} /></div>
+                      <div className="col-span-2"><Input className="h-8 text-xs" type="number" step="0.01" value={line.rate} onChange={e => updatePOLine(i, 'rate', parseFloat(e.target.value) || 0)} /></div>
+                      <div className="col-span-2 text-right text-sm font-medium">{formatCurrency(line.amount)}</div>
+                      <div className="col-span-1"><Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setPOLines(poLines.filter((_, j) => j !== i))} disabled={poLines.length <= 1}><Trash2 className="w-3 h-3" /></Button></div>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" size="sm" onClick={() => setPOLines([...poLines, { description: '', quantity: 1, rate: 0, amount: 0 }])}><Plus className="w-3 h-3 mr-1" />Add Line</Button>
+                  <div className="border-t pt-2 text-sm flex justify-between font-semibold"><span>Total</span><span>{formatCurrency(poTotal)}</span></div>
+                </div>
+              </div>
+              <div className="space-y-2"><Label>Notes</Label><Textarea value={poForm.notes} onChange={e => setPOForm({ ...poForm, notes: e.target.value })} rows={2} /></div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setPODialog(false)}>Cancel</Button>
+              <Button type="submit" disabled={savingPO || !poForm.vendor_id}>{savingPO && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Create PO</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Confirmation ── */}
+      <AlertDialog open={deleteDialog} onOpenChange={setDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Delete {deleteTarget?.type === 'vendor' ? 'Vendor' : deleteTarget?.type === 'bill' ? 'Bill' : 'Purchase Order'}</AlertDialogTitle><AlertDialogDescription>Delete &quot;{deleteTarget?.label}&quot;? This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────
+// ROOT — route by account type
+// ─────────────────────────────────────────────────────────────
+
+export default function BillsPage() {
+  const { hasCapability } = useAppState()
+  const isAP = hasCapability(Capability.viewAccountsPayable)
+  return isAP ? <AccountsPayableView /> : <PersonalBillsView />
+}

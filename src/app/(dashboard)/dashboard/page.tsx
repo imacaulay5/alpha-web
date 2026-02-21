@@ -18,13 +18,17 @@ import {
   CheckCircle,
   AlertCircle,
   Plus,
+  CreditCard,
+  CalendarClock,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 // Personal account dashboard stats
 const personalStats = [
-  { title: 'Bills This Month', value: '$1,234', change: '+5.2%', trend: 'up', icon: Receipt },
+  { title: 'Upcoming Bills', value: '5', change: '3 due this week', trend: 'up', icon: CalendarClock },
+  { title: 'Bills This Month', value: '$1,234', change: '+5.2%', trend: 'up', icon: CreditCard },
   { title: 'Payments Made', value: '12', change: '-2.1%', trend: 'down', icon: DollarSign },
+  { title: 'Monthly Spending', value: '$2,890', change: '-4.5%', trend: 'down', icon: Receipt },
 ]
 
 // Freelancer account dashboard stats
@@ -85,6 +89,15 @@ export default function DashboardPage() {
       iconColor: 'text-blue-600 dark:text-blue-400',
     },
     {
+      title: 'Pay Bill',
+      description: 'Record a bill payment',
+      icon: CreditCard,
+      action: () => router.push('/bills'),
+      capability: Capability.manageBillPayments,
+      color: 'bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900',
+      iconColor: 'text-blue-600 dark:text-blue-400',
+    },
+    {
       title: 'Add Expense',
       description: 'Record an expense',
       icon: Receipt,
@@ -98,7 +111,7 @@ export default function DashboardPage() {
       description: 'Log a payment received',
       icon: DollarSign,
       action: () => router.push('/invoices'),
-      capability: Capability.createInvoices,
+      capability: Capability.recordPayments,
       color: 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950 dark:hover:bg-orange-900',
       iconColor: 'text-orange-600 dark:text-orange-400',
     },
@@ -228,6 +241,18 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+              {hasCapability(Capability.viewBills) && (
+                <>
+                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                    <span className="text-sm">Overdue Bills</span>
+                    <Badge variant="destructive">1</Badge>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                    <span className="text-sm">Due This Week</span>
+                    <Badge variant="secondary">3</Badge>
+                  </div>
+                </>
+              )}
               {hasCapability(Capability.viewInvoices) && (
                 <>
                   <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">

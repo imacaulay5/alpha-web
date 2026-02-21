@@ -20,6 +20,11 @@ import {
   ChevronDown,
   Loader2,
   PanelLeft,
+  CreditCard,
+  BookOpen,
+  Calculator,
+  Banknote,
+  Package,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -43,6 +48,11 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   Users,
   UserCog,
   Settings,
+  CreditCard,
+  BookOpen,
+  Calculator,
+  Banknote,
+  Package,
 }
 
 export default function DashboardLayout({

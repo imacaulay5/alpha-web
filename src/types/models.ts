@@ -7,6 +7,17 @@ import {
   ExpenseStatus,
   ExpenseCategory,
   BillingModel,
+  BillStatus,
+  BillCategory,
+  BillRecurrence,
+  AccountCategory,
+  JournalEntryStatus,
+  VendorStatus,
+  PurchaseOrderStatus,
+  PayrollStatus,
+  PayFrequency,
+  StockStatus,
+  TaxFilingStatus,
 } from './enums'
 
 // ============================================================
@@ -210,6 +221,296 @@ export interface Expense {
 }
 
 // ============================================================
+// Bill (Personal bills/payments)
+// ============================================================
+
+export interface Bill {
+  id: string
+  user_id: string
+  name: string
+  payee: string
+  amount: number
+  currency: string
+  category: BillCategory
+  due_date: string
+  status: BillStatus
+  recurrence: BillRecurrence
+  notes?: string
+  paid_at?: string
+  auto_pay: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================
+// Chart of Accounts
+// ============================================================
+
+export interface Account {
+  id: string
+  organization_id?: string
+  user_id?: string
+  code: string
+  name: string
+  category: AccountCategory
+  parent_id?: string
+  description?: string
+  is_active: boolean
+  balance: number
+  created_at: string
+  updated_at: string
+  // Relations
+  children?: Account[]
+}
+
+// ============================================================
+// Journal Entry
+// ============================================================
+
+export interface JournalEntry {
+  id: string
+  organization_id?: string
+  user_id?: string
+  entry_number: string
+  date: string
+  description: string
+  status: JournalEntryStatus
+  reference?: string
+  notes?: string
+  created_at: string
+  updated_at: string
+  // Relations
+  lines?: JournalEntryLine[]
+}
+
+export interface JournalEntryLine {
+  id: string
+  journal_entry_id: string
+  account_id: string
+  description?: string
+  debit: number
+  credit: number
+  order: number
+  created_at: string
+  updated_at: string
+  // Relations
+  account?: Account
+}
+
+// ============================================================
+// Vendor
+// ============================================================
+
+export interface Vendor {
+  id: string
+  organization_id?: string
+  user_id?: string
+  name: string
+  email?: string
+  phone?: string
+  address?: string
+  city?: string
+  state?: string
+  zip_code?: string
+  country?: string
+  contact_name?: string
+  tax_id?: string
+  payment_terms?: number
+  notes?: string
+  status: VendorStatus
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================
+// Vendor Bill (Accounts Payable)
+// ============================================================
+
+export interface VendorBill {
+  id: string
+  organization_id?: string
+  user_id?: string
+  vendor_id: string
+  bill_number: string
+  issue_date: string
+  due_date: string
+  subtotal: number
+  tax_rate: number
+  tax_amount: number
+  total: number
+  currency: string
+  status: BillStatus
+  notes?: string
+  paid_at?: string
+  created_at: string
+  updated_at: string
+  // Relations
+  vendor?: Vendor
+  line_items?: VendorBillLineItem[]
+}
+
+export interface VendorBillLineItem {
+  id: string
+  vendor_bill_id: string
+  description: string
+  quantity: number
+  rate: number
+  amount: number
+  account_id?: string
+  order: number
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================
+// Purchase Order
+// ============================================================
+
+export interface PurchaseOrder {
+  id: string
+  organization_id?: string
+  user_id?: string
+  vendor_id: string
+  po_number: string
+  date: string
+  expected_date?: string
+  subtotal: number
+  tax_rate: number
+  tax_amount: number
+  total: number
+  currency: string
+  status: PurchaseOrderStatus
+  notes?: string
+  created_at: string
+  updated_at: string
+  // Relations
+  vendor?: Vendor
+  line_items?: PurchaseOrderLineItem[]
+}
+
+export interface PurchaseOrderLineItem {
+  id: string
+  purchase_order_id: string
+  description: string
+  quantity: number
+  rate: number
+  amount: number
+  order: number
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================
+// Employee (Payroll)
+// ============================================================
+
+export interface Employee {
+  id: string
+  organization_id: string
+  user_id?: string
+  name: string
+  email: string
+  department?: string
+  title?: string
+  hire_date: string
+  salary: number
+  pay_frequency: PayFrequency
+  tax_filing_status?: string
+  federal_allowances: number
+  state_allowances: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================
+// Payroll Run
+// ============================================================
+
+export interface PayrollRun {
+  id: string
+  organization_id: string
+  pay_period_start: string
+  pay_period_end: string
+  pay_date: string
+  status: PayrollStatus
+  total_gross: number
+  total_deductions: number
+  total_net: number
+  total_employer_taxes: number
+  notes?: string
+  created_at: string
+  updated_at: string
+  // Relations
+  pay_stubs?: PayStub[]
+}
+
+export interface PayStub {
+  id: string
+  payroll_run_id: string
+  employee_id: string
+  gross_pay: number
+  federal_tax: number
+  state_tax: number
+  social_security: number
+  medicare: number
+  other_deductions: number
+  net_pay: number
+  hours_worked?: number
+  created_at: string
+  updated_at: string
+  // Relations
+  employee?: Employee
+}
+
+// ============================================================
+// Inventory
+// ============================================================
+
+export interface InventoryItem {
+  id: string
+  organization_id: string
+  sku: string
+  name: string
+  description?: string
+  category?: string
+  unit_price: number
+  cost_price: number
+  quantity_on_hand: number
+  reorder_point: number
+  reorder_quantity: number
+  supplier_id?: string
+  stock_status: StockStatus
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  // Relations
+  supplier?: Vendor
+}
+
+// ============================================================
+// Tax Filing
+// ============================================================
+
+export interface TaxFiling {
+  id: string
+  organization_id?: string
+  user_id?: string
+  name: string
+  form_type: string
+  tax_period_start: string
+  tax_period_end: string
+  due_date: string
+  filed_date?: string
+  status: TaxFilingStatus
+  amount_due?: number
+  amount_paid?: number
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+// ============================================================
 // Form Types (for creating/updating)
 // ============================================================
 
@@ -239,3 +540,36 @@ export type UpdateInvoiceLineItemInput = Partial<CreateInvoiceLineItemInput>
 
 export type CreateExpenseInput = Omit<Expense, 'id' | 'created_at' | 'updated_at' | 'project' | 'task' | 'user'>
 export type UpdateExpenseInput = Partial<CreateExpenseInput>
+
+export type CreateBillInput = Omit<Bill, 'id' | 'created_at' | 'updated_at'>
+export type UpdateBillInput = Partial<CreateBillInput>
+
+export type CreateAccountInput = Omit<Account, 'id' | 'created_at' | 'updated_at' | 'children' | 'balance'>
+export type UpdateAccountInput = Partial<CreateAccountInput>
+
+export type CreateJournalEntryInput = Omit<JournalEntry, 'id' | 'created_at' | 'updated_at' | 'lines'>
+export type UpdateJournalEntryInput = Partial<CreateJournalEntryInput>
+
+export type CreateJournalEntryLineInput = Omit<JournalEntryLine, 'id' | 'created_at' | 'updated_at' | 'account'>
+export type UpdateJournalEntryLineInput = Partial<CreateJournalEntryLineInput>
+
+export type CreateVendorInput = Omit<Vendor, 'id' | 'created_at' | 'updated_at'>
+export type UpdateVendorInput = Partial<CreateVendorInput>
+
+export type CreateVendorBillInput = Omit<VendorBill, 'id' | 'created_at' | 'updated_at' | 'vendor' | 'line_items'>
+export type UpdateVendorBillInput = Partial<CreateVendorBillInput>
+
+export type CreatePurchaseOrderInput = Omit<PurchaseOrder, 'id' | 'created_at' | 'updated_at' | 'vendor' | 'line_items'>
+export type UpdatePurchaseOrderInput = Partial<CreatePurchaseOrderInput>
+
+export type CreateEmployeeInput = Omit<Employee, 'id' | 'created_at' | 'updated_at'>
+export type UpdateEmployeeInput = Partial<CreateEmployeeInput>
+
+export type CreatePayrollRunInput = Omit<PayrollRun, 'id' | 'created_at' | 'updated_at' | 'pay_stubs'>
+export type UpdatePayrollRunInput = Partial<CreatePayrollRunInput>
+
+export type CreateInventoryItemInput = Omit<InventoryItem, 'id' | 'created_at' | 'updated_at' | 'supplier'>
+export type UpdateInventoryItemInput = Partial<CreateInventoryItemInput>
+
+export type CreateTaxFilingInput = Omit<TaxFiling, 'id' | 'created_at' | 'updated_at'>
+export type UpdateTaxFilingInput = Partial<CreateTaxFilingInput>

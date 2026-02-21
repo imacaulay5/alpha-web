@@ -67,6 +67,12 @@ export enum Capability {
   reconcileBankAccounts = 'reconcileBankAccounts',
   manageChartOfAccounts = 'manageChartOfAccounts',
   recordJournalEntries = 'recordJournalEntries',
+  viewFinancialReports = 'viewFinancialReports',
+
+  // Bills & Payments (Personal)
+  viewBills = 'viewBills',
+  manageBillPayments = 'manageBillPayments',
+  trackRecurringBills = 'trackRecurringBills',
 
   // Inventory
   viewInventory = 'viewInventory',
@@ -265,4 +271,214 @@ export const billingModelLabels: Record<BillingModel, string> = {
   [BillingModel.milestone]: 'Milestone',
   [BillingModel.taskBased]: 'Task Based',
   [BillingModel.notBillable]: 'Not Billable',
+}
+
+// ============================================================
+// Bill Status (for personal bills/payments)
+// ============================================================
+
+export enum BillStatus {
+  upcoming = 'upcoming',
+  due = 'due',
+  paid = 'paid',
+  overdue = 'overdue',
+  cancelled = 'cancelled',
+}
+
+export const billStatusLabels: Record<BillStatus, string> = {
+  [BillStatus.upcoming]: 'Upcoming',
+  [BillStatus.due]: 'Due',
+  [BillStatus.paid]: 'Paid',
+  [BillStatus.overdue]: 'Overdue',
+  [BillStatus.cancelled]: 'Cancelled',
+}
+
+// ============================================================
+// Bill Category
+// ============================================================
+
+export enum BillCategory {
+  rent = 'rent',
+  utilities = 'utilities',
+  insurance = 'insurance',
+  subscription = 'subscription',
+  loan = 'loan',
+  creditCard = 'credit_card',
+  phone = 'phone',
+  internet = 'internet',
+  other = 'other',
+}
+
+export const billCategoryLabels: Record<BillCategory, string> = {
+  [BillCategory.rent]: 'Rent/Mortgage',
+  [BillCategory.utilities]: 'Utilities',
+  [BillCategory.insurance]: 'Insurance',
+  [BillCategory.subscription]: 'Subscription',
+  [BillCategory.loan]: 'Loan Payment',
+  [BillCategory.creditCard]: 'Credit Card',
+  [BillCategory.phone]: 'Phone',
+  [BillCategory.internet]: 'Internet',
+  [BillCategory.other]: 'Other',
+}
+
+// ============================================================
+// Bill Recurrence
+// ============================================================
+
+export enum BillRecurrence {
+  once = 'once',
+  weekly = 'weekly',
+  biweekly = 'biweekly',
+  monthly = 'monthly',
+  quarterly = 'quarterly',
+  annually = 'annually',
+}
+
+export const billRecurrenceLabels: Record<BillRecurrence, string> = {
+  [BillRecurrence.once]: 'One-time',
+  [BillRecurrence.weekly]: 'Weekly',
+  [BillRecurrence.biweekly]: 'Bi-weekly',
+  [BillRecurrence.monthly]: 'Monthly',
+  [BillRecurrence.quarterly]: 'Quarterly',
+  [BillRecurrence.annually]: 'Annually',
+}
+
+// ============================================================
+// Account Category (Chart of Accounts)
+// ============================================================
+
+export enum AccountCategory {
+  assets = 'assets',
+  liabilities = 'liabilities',
+  equity = 'equity',
+  revenue = 'revenue',
+  expenses = 'expenses',
+}
+
+export const accountCategoryLabels: Record<AccountCategory, string> = {
+  [AccountCategory.assets]: 'Assets',
+  [AccountCategory.liabilities]: 'Liabilities',
+  [AccountCategory.equity]: 'Equity',
+  [AccountCategory.revenue]: 'Revenue',
+  [AccountCategory.expenses]: 'Expenses',
+}
+
+// ============================================================
+// Journal Entry Status
+// ============================================================
+
+export enum JournalEntryStatus {
+  draft = 'draft',
+  posted = 'posted',
+  voided = 'voided',
+}
+
+export const journalEntryStatusLabels: Record<JournalEntryStatus, string> = {
+  [JournalEntryStatus.draft]: 'Draft',
+  [JournalEntryStatus.posted]: 'Posted',
+  [JournalEntryStatus.voided]: 'Voided',
+}
+
+// ============================================================
+// Vendor Status
+// ============================================================
+
+export enum VendorStatus {
+  active = 'active',
+  inactive = 'inactive',
+}
+
+export const vendorStatusLabels: Record<VendorStatus, string> = {
+  [VendorStatus.active]: 'Active',
+  [VendorStatus.inactive]: 'Inactive',
+}
+
+// ============================================================
+// Purchase Order Status
+// ============================================================
+
+export enum PurchaseOrderStatus {
+  draft = 'draft',
+  sent = 'sent',
+  received = 'received',
+  cancelled = 'cancelled',
+}
+
+export const purchaseOrderStatusLabels: Record<PurchaseOrderStatus, string> = {
+  [PurchaseOrderStatus.draft]: 'Draft',
+  [PurchaseOrderStatus.sent]: 'Sent',
+  [PurchaseOrderStatus.received]: 'Received',
+  [PurchaseOrderStatus.cancelled]: 'Cancelled',
+}
+
+// ============================================================
+// Payroll Status
+// ============================================================
+
+export enum PayrollStatus {
+  draft = 'draft',
+  processing = 'processing',
+  completed = 'completed',
+  failed = 'failed',
+}
+
+export const payrollStatusLabels: Record<PayrollStatus, string> = {
+  [PayrollStatus.draft]: 'Draft',
+  [PayrollStatus.processing]: 'Processing',
+  [PayrollStatus.completed]: 'Completed',
+  [PayrollStatus.failed]: 'Failed',
+}
+
+// ============================================================
+// Pay Frequency
+// ============================================================
+
+export enum PayFrequency {
+  weekly = 'weekly',
+  biweekly = 'biweekly',
+  semimonthly = 'semimonthly',
+  monthly = 'monthly',
+}
+
+export const payFrequencyLabels: Record<PayFrequency, string> = {
+  [PayFrequency.weekly]: 'Weekly',
+  [PayFrequency.biweekly]: 'Bi-weekly',
+  [PayFrequency.semimonthly]: 'Semi-monthly',
+  [PayFrequency.monthly]: 'Monthly',
+}
+
+// ============================================================
+// Inventory / Stock Status
+// ============================================================
+
+export enum StockStatus {
+  inStock = 'in_stock',
+  lowStock = 'low_stock',
+  outOfStock = 'out_of_stock',
+}
+
+export const stockStatusLabels: Record<StockStatus, string> = {
+  [StockStatus.inStock]: 'In Stock',
+  [StockStatus.lowStock]: 'Low Stock',
+  [StockStatus.outOfStock]: 'Out of Stock',
+}
+
+// ============================================================
+// Tax Filing Status
+// ============================================================
+
+export enum TaxFilingStatus {
+  notStarted = 'not_started',
+  inProgress = 'in_progress',
+  filed = 'filed',
+  accepted = 'accepted',
+  rejected = 'rejected',
+}
+
+export const taxFilingStatusLabels: Record<TaxFilingStatus, string> = {
+  [TaxFilingStatus.notStarted]: 'Not Started',
+  [TaxFilingStatus.inProgress]: 'In Progress',
+  [TaxFilingStatus.filed]: 'Filed',
+  [TaxFilingStatus.accepted]: 'Accepted',
+  [TaxFilingStatus.rejected]: 'Rejected',
 }

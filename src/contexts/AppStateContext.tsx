@@ -7,7 +7,7 @@ import { getUserCapabilities } from '@/lib/capabilities'
 import type { User, Organization } from '@/types/models'
 
 // Tab definitions matching iOS app
-export type TabId = 'home' | 'time' | 'invoices' | 'expenses' | 'projects' | 'clients' | 'team' | 'settings'
+export type TabId = 'home' | 'time' | 'invoices' | 'bills' | 'expenses' | 'projects' | 'clients' | 'accounting' | 'tax' | 'payroll' | 'inventory' | 'team' | 'settings'
 
 export interface Tab {
   id: TabId
@@ -34,6 +34,13 @@ const allTabs: Tab[] = [
     requiredCapabilities: [Capability.viewInvoices],
   },
   {
+    id: 'bills',
+    label: 'Bills',
+    icon: 'CreditCard',
+    path: '/bills',
+    requiredCapabilities: [Capability.viewBills, Capability.viewAccountsPayable],
+  },
+  {
     id: 'expenses',
     label: 'Expenses',
     icon: 'Receipt',
@@ -53,6 +60,34 @@ const allTabs: Tab[] = [
     icon: 'Users',
     path: '/clients',
     requiredCapabilities: [Capability.viewClients],
+  },
+  {
+    id: 'accounting',
+    label: 'Accounting',
+    icon: 'BookOpen',
+    path: '/accounting',
+    requiredCapabilities: [Capability.manageChartOfAccounts, Capability.recordJournalEntries, Capability.viewFinancialReports, Capability.viewFinancialStatements],
+  },
+  {
+    id: 'tax',
+    label: 'Tax',
+    icon: 'Calculator',
+    path: '/tax',
+    requiredCapabilities: [Capability.viewTaxDashboard],
+  },
+  {
+    id: 'payroll',
+    label: 'Payroll',
+    icon: 'Banknote',
+    path: '/payroll',
+    requiredCapabilities: [Capability.viewPayroll],
+  },
+  {
+    id: 'inventory',
+    label: 'Inventory',
+    icon: 'Package',
+    path: '/inventory',
+    requiredCapabilities: [Capability.viewInventory],
   },
   {
     id: 'team',
@@ -109,8 +144,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     if (!user) return []
 
     return visibleTabs.filter((tab) => {
-      // Team tab only visible for business accounts
-      if (tab.id === 'team' && user.account_type !== AccountType.business) {
+      // Team, payroll, inventory tabs only visible for business accounts
+      if (['team', 'payroll', 'inventory'].includes(tab.id) && user.account_type !== AccountType.business) {
+        return false
+      }
+      // Personal users don't create invoices -- they use Bills instead
+      if (tab.id === 'invoices' && user.account_type === AccountType.personal) {
         return false
       }
       return true
