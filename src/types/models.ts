@@ -532,10 +532,20 @@ export type UpdateTaskInput = Partial<CreateTaskInput>
 export type CreateTimeEntryInput = Omit<TimeEntry, 'id' | 'created_at' | 'updated_at' | 'project' | 'task' | 'user'>
 export type UpdateTimeEntryInput = Partial<CreateTimeEntryInput>
 
-export type CreateInvoiceInput = Omit<Invoice, 'id' | 'created_at' | 'updated_at' | 'client' | 'project' | 'line_items'>
-export type UpdateInvoiceInput = Partial<CreateInvoiceInput>
+export type CreateInvoiceInput = Pick<Invoice, 'organization_id' | 'user_id' | 'client_id' | 'project_id' | 'issue_date' | 'due_date' | 'tax_rate' | 'currency' | 'notes'> & {
+  invoice_number?: string
+}
 
-export type CreateInvoiceLineItemInput = Omit<InvoiceLineItem, 'id' | 'created_at' | 'updated_at'>
+export type UpdateInvoiceInput = Partial<
+  Pick<Invoice, 'client_id' | 'project_id' | 'invoice_number' | 'issue_date' | 'due_date' | 'tax_rate' | 'currency' | 'notes' | 'paid_at'>
+> & {
+  status?: InvoiceStatus | string
+}
+
+export type CreateInvoiceLineItemInput = Pick<InvoiceLineItem, 'invoice_id' | 'description' | 'quantity' | 'rate'> & {
+  amount?: number
+  order?: number
+}
 export type UpdateInvoiceLineItemInput = Partial<CreateInvoiceLineItemInput>
 
 export type CreateExpenseInput = Omit<Expense, 'id' | 'created_at' | 'updated_at' | 'project' | 'task' | 'user'>

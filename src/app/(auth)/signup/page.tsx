@@ -47,7 +47,7 @@ export default function SignUpPage() {
     } else if (result.needsVerification) {
       setNeedsVerification(true)
     } else {
-      router.push('/account-type')
+      router.push('/')
     }
   }
 

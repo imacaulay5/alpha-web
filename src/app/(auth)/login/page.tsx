@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
@@ -22,7 +22,20 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, isLoading } = useAuth()
+  const { login, isAuthenticated, isLoading, recoveryPath, session } = useAuth()
+
+  useEffect(() => {
+    if (isLoading) return
+
+    if (isAuthenticated) {
+      router.replace('/dashboard')
+      return
+    }
+
+    if (session && recoveryPath) {
+      router.replace(recoveryPath)
+    }
+  }, [isAuthenticated, isLoading, recoveryPath, router, session])
   const [error, setError] = useState<string | null>(null)
 
   const {
@@ -39,7 +52,7 @@ export default function LoginPage() {
     if (result.error) {
       setError(result.error)
     } else {
-      router.push('/dashboard')
+      router.push('/')
     }
   }
 
