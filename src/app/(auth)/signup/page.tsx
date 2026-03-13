@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, CheckCircle } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 const signUpSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -29,7 +29,6 @@ export default function SignUpPage() {
   const router = useRouter()
   const { signUp, isLoading } = useAuth()
   const [error, setError] = useState<string | null>(null)
-  const [needsVerification, setNeedsVerification] = useState(false)
 
   const {
     register,
@@ -45,35 +44,13 @@ export default function SignUpPage() {
     if (result.error) {
       setError(result.error)
     } else if (result.needsVerification) {
-      setNeedsVerification(true)
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('pendingVerificationEmail', data.email)
+      }
+      router.push(`/verify?email=${encodeURIComponent(data.email)}`)
     } else {
       router.push('/')
     }
-  }
-
-  if (needsVerification) {
-    return (
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-4">
-            <CheckCircle className="h-12 w-12 text-green-500" />
-          </div>
-          <CardTitle className="text-2xl font-bold">Check your email</CardTitle>
-          <CardDescription>
-            We&apos;ve sent you a verification link. Please check your email and click the link to verify your account.
-          </CardDescription>
-        </CardHeader>
-        <CardFooter className="flex flex-col space-y-4">
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => router.push('/login')}
-          >
-            Back to Login
-          </Button>
-        </CardFooter>
-      </Card>
-    )
   }
 
   return (

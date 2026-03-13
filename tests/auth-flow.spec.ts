@@ -27,7 +27,8 @@ test('signup submit reaches a visible post-submit state', async ({ page }) => {
   await page.getByRole('button', { name: /create account/i }).click()
 
   await Promise.race([
-    expect(page.getByText(/check your email/i)).toBeVisible({ timeout: 15000 }),
+    expect(page).toHaveURL(new RegExp(`/verify\\?email=${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), { timeout: 15000 }),
+    expect(page.locator('body')).toContainText(/check your email|verify your email/i, { timeout: 15000 }),
     expect(page.locator('body')).toContainText(/error|invalid|already|failed/i, { timeout: 15000 }),
     expect(page).toHaveURL(/account-type|dashboard/, { timeout: 15000 }),
   ])

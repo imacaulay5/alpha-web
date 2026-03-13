@@ -21,6 +21,8 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null; needsVerification: boolean }>
+  verifyEmailOtp: (params: { email?: string; token?: string; tokenHash?: string; type?: 'signup' | 'email' | 'magiclink' | 'recovery' | 'invite' | 'email_change' }) => Promise<{ error: string | null; nextPath: string }>
+  resendVerification: (email: string) => Promise<{ error: string | null }>
   logout: () => Promise<void>
   setAccountType: (accountType: AccountType) => Promise<{ error: string | null }>
   createOrganization: (name: string) => Promise<{ error: string | null }>
@@ -192,6 +194,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  const getPostAuthPath = (user: User | null) => getRecoveryPath(user) ?? '/dashboard'
+
   const login = async (email: string, password: string) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
 
@@ -230,6 +234,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     return { error: null, needsVerification: false }
+  }
+
+
+
+  const verifyEmailOtp = async ({
+    email,
+    token,
+    tokenHash,
+    type = 'signup',
+  }: {
+    email?: string
+    token?: string
+    tokenHash?: string
+    type?: 'signup' | 'email' | 'magiclink' | 'recovery' | 'invite' | 'email_change'
+  }) => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }))
+
+    const response = tokenHash
+      ? await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type,
+        })
+      : email && token
+        ? await supabase.auth.verifyOtp({
+            email,
+            token,
+            type,
+          })
+        : { data: { session: null }, error: { message: 'Missing verification code.' } as { message: string } }
+
+    if (response.error) {
+      setState(prev => ({ ...prev, isLoading: false, error: response.error.message }))
+      return { error: response.error.message, nextPath: '/verify' }
+    }
+
+    await bootstrapAuthState(response.data.session ?? null)
+    const user = await fetchUserProfile(response.data.session?.user?.id ?? '')
+    return { error: null, nextPath: getPostAuthPath(user) }
+  }
+
+  const resendVerification = async (email: string) => {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+    })
+
+    if (error) {
+      return { error: error.message }
+    }
+
+    return { error: null }
   }
 
   const logout = async () => {
@@ -308,6 +363,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ...state,
         login,
         signUp,
+        verifyEmailOtp,
+        resendVerification,
         logout,
         setAccountType,
         createOrganization,
