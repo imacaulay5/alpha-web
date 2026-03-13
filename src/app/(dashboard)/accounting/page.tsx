@@ -312,7 +312,9 @@ export default function AccountingPage() {
         reference: entryForm.reference || undefined,
         notes: entryForm.notes || undefined,
       }
-      const validLines = journalLines.filter(l => l.account_id)
+      const validLines = journalLines
+        .filter((line) => line.account_id)
+        .map((line, index) => ({ ...line, order: index }))
       await createJournalEntry(input, validLines)
       toast.success('Journal entry created')
       setEntryDialogOpen(false)
