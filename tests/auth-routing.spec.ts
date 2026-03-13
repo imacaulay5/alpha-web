@@ -1,15 +1,31 @@
 import { test, expect } from '@playwright/test'
-import { gotoAndWait, expectTextSomewhere } from './helpers'
 
-test('account type page loads and can select a user type', async ({ page }) => {
-  await gotoAndWait(page, '/account-type')
-  await expectTextSomewhere(page, [/choose your account type/i])
-  await page.getByText(/personal/i).first().click()
-  await expect(page.getByRole('button', { name: /continue/i })).toBeEnabled()
+test('unauthenticated account type route redirects to login', async ({ page }) => {
+  await page.goto('/account-type')
+  await expect(page).toHaveURL(/\/login/)
+  await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
 })
 
-test('onboarding page loads organization form', async ({ page }) => {
-  await gotoAndWait(page, '/onboarding')
-  await expectTextSomewhere(page, [/set up your organization/i, /organization name/i])
-  await expect(page.getByLabel(/organization name/i)).toBeVisible()
+test('unauthenticated onboarding route redirects to login', async ({ page }) => {
+  await page.goto('/onboarding')
+  await expect(page).toHaveURL(/\/login/)
+  await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
+})
+
+test('unauthenticated home redirects to login', async ({ page }) => {
+  await page.goto('/')
+  await expect(page).toHaveURL(/\/login/)
+  await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
+})
+
+test('unauthenticated dashboard redirects to login', async ({ page }) => {
+  await page.goto('/dashboard')
+  await expect(page).toHaveURL(/\/login/)
+  await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
+})
+
+test('unauthenticated invoices route redirects to login', async ({ page }) => {
+  await page.goto('/invoices')
+  await expect(page).toHaveURL(/\/login/)
+  await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
 })
