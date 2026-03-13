@@ -37,6 +37,21 @@ function mapUser(data: Record<string, unknown>): User {
   } as User
 }
 
+function getAccountTypeFromMetadata(supabaseUser: SupabaseUser): AccountType | undefined {
+  const candidates = [
+    supabaseUser.user_metadata?.account_type,
+    supabaseUser.app_metadata?.account_type,
+  ]
+
+  for (const candidate of candidates) {
+    if (candidate === AccountType.personal || candidate === AccountType.freelancer || candidate === AccountType.business) {
+      return candidate
+    }
+  }
+
+  return undefined
+}
+
 function getRecoveryPath(user: User | null): string | null {
   if (!user?.account_type) {
     return '/account-type'
@@ -81,7 +96,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const repairUserProfile = async (supabaseUser: SupabaseUser): Promise<User | null> => {
     const existingUser = await fetchUserProfile(supabaseUser.id)
-    if (existingUser) {
+    const accountTypeFromMetadata = getAccountTypeFromMetadata(supabaseUser)
+
+    if (existingUser?.account_type || !accountTypeFromMetadata) {
       return existingUser
     }
 
@@ -92,7 +109,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         (typeof supabaseUser.user_metadata?.name === 'string' && supabaseUser.user_metadata.name.trim()) ||
         (typeof supabaseUser.user_metadata?.full_name === 'string' && supabaseUser.user_metadata.full_name.trim()) ||
         (supabaseUser.email?.split('@')[0] ?? 'New User'),
-      role: Role.owner,
+      role: existingUser?.role ?? Role.owner,
+      account_type: accountTypeFromMetadata,
+      organization_id:
+        typeof supabaseUser.user_metadata?.organization_id === 'string'
+          ? supabaseUser.user_metadata.organization_id
+          : existingUser?.organization_id,
     }
 
     const { data, error } = await supabase
@@ -103,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error) {
       console.error('Error repairing user profile:', error)
-      return null
+      return existingUser
     }
 
     return mapUser(data as Record<string, unknown>)
