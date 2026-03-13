@@ -13,6 +13,8 @@ interface AuthState {
   organization: Organization | null
   isLoading: boolean
   isAuthenticated: boolean
+  isProfileReady: boolean
+  recoveryPath: string | null
   error: string | null
 }
 
@@ -27,6 +29,26 @@ interface AuthContextValue extends AuthState {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+function mapUser(data: Record<string, unknown>): User {
+  return {
+    ...data,
+    role: data.role as Role,
+    account_type: data.account_type as AccountType,
+  } as User
+}
+
+function getRecoveryPath(user: User | null): string | null {
+  if (!user?.account_type) {
+    return '/account-type'
+  }
+
+  if (user.account_type === AccountType.business && !user.organization_id) {
+    return '/onboarding'
+  }
+
+  return null
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     session: null,
@@ -35,32 +57,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     organization: null,
     isLoading: true,
     isAuthenticated: false,
+    isProfileReady: false,
+    recoveryPath: null,
     error: null,
   })
 
   const supabase = getSupabaseClient()
 
-  // Fetch user profile from users table
   const fetchUserProfile = async (userId: string): Promise<User | null> => {
     const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single()
+      .maybeSingle()
 
-    if (error || !data) {
+    if (error) {
       console.error('Error fetching user profile:', error)
       return null
     }
 
-    return {
-      ...data,
-      role: data.role as Role,
-      account_type: data.account_type as AccountType,
-    } as User
+    return data ? mapUser(data as Record<string, unknown>) : null
   }
 
-  // Fetch organization if user has one
+  const repairUserProfile = async (supabaseUser: SupabaseUser): Promise<User | null> => {
+    const existingUser = await fetchUserProfile(supabaseUser.id)
+    if (existingUser) {
+      return existingUser
+    }
+
+    const repairPayload = {
+      id: supabaseUser.id,
+      email: supabaseUser.email ?? '',
+      name:
+        (typeof supabaseUser.user_metadata?.name === 'string' && supabaseUser.user_metadata.name.trim()) ||
+        (typeof supabaseUser.user_metadata?.full_name === 'string' && supabaseUser.user_metadata.full_name.trim()) ||
+        (supabaseUser.email?.split('@')[0] ?? 'New User'),
+      role: Role.owner,
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .upsert(repairPayload, { onConflict: 'id' })
+      .select('*')
+      .single()
+
+    if (error) {
+      console.error('Error repairing user profile:', error)
+      return null
+    }
+
+    return mapUser(data as Record<string, unknown>)
+  }
+
   const fetchOrganization = async (organizationId: string): Promise<Organization | null> => {
     const { data, error } = await supabase
       .from('organizations')
@@ -76,48 +124,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return data as Organization
   }
 
-  // Initialize auth state
+  const bootstrapAuthState = async (session: Session | null) => {
+    if (!session?.user) {
+      setState({
+        session: null,
+        supabaseUser: null,
+        user: null,
+        organization: null,
+        isLoading: false,
+        isAuthenticated: false,
+        isProfileReady: false,
+        recoveryPath: null,
+        error: null,
+      })
+      return
+    }
+
+    const user = await repairUserProfile(session.user)
+    let organization: Organization | null = null
+
+    if (user?.organization_id) {
+      organization = await fetchOrganization(user.organization_id)
+    }
+
+    const recoveryPath = getRecoveryPath(user)
+
+    setState({
+      session,
+      supabaseUser: session.user,
+      user,
+      organization,
+      isLoading: false,
+      isAuthenticated: Boolean(user) && !recoveryPath,
+      isProfileReady: Boolean(user) && !recoveryPath,
+      recoveryPath,
+      error: user ? null : 'We could not finish loading your profile.',
+    })
+  }
+
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const user = await fetchUserProfile(session.user.id)
-        let organization: Organization | null = null
-        if (user?.organization_id) {
-          organization = await fetchOrganization(user.organization_id)
-        }
-        setState({
-          session,
-          supabaseUser: session.user,
-          user,
-          organization,
-          isLoading: false,
-          isAuthenticated: true,
-          error: null,
-        })
-      } else {
-        setState(prev => ({ ...prev, isLoading: false }))
-      }
+      await bootstrapAuthState(session)
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          const user = await fetchUserProfile(session.user.id)
-          let organization: Organization | null = null
-          if (user?.organization_id) {
-            organization = await fetchOrganization(user.organization_id)
-          }
-          setState({
-            session,
-            supabaseUser: session.user,
-            user,
-            organization,
-            isLoading: false,
-            isAuthenticated: true,
-            error: null,
-          })
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED') {
+          await bootstrapAuthState(session)
         } else if (event === 'SIGNED_OUT') {
           setState({
             session: null,
@@ -126,6 +179,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             organization: null,
             isLoading: false,
             isAuthenticated: false,
+            isProfileReady: false,
+            recoveryPath: null,
             error: null,
           })
         } else if (event === 'TOKEN_REFRESHED' && session) {
@@ -169,7 +224,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: error.message, needsVerification: false }
     }
 
-    // If email confirmation is required
     if (data.user && !data.session) {
       setState(prev => ({ ...prev, isLoading: false }))
       return { error: null, needsVerification: true }
@@ -188,6 +242,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       organization: null,
       isLoading: false,
       isAuthenticated: false,
+      isProfileReady: false,
+      recoveryPath: null,
       error: null,
     })
   }
@@ -206,10 +262,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: error.message }
     }
 
-    // Refresh user data
-    const user = await fetchUserProfile(state.supabaseUser.id)
-    setState(prev => ({ ...prev, user }))
-
+    await refreshUser()
     return { error: null }
   }
 
@@ -218,7 +271,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: 'Not authenticated' }
     }
 
-    // Create organization
     const { data: org, error: orgError } = await supabase
       .from('organizations')
       .insert({ name })
@@ -229,7 +281,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: orgError?.message || 'Failed to create organization' }
     }
 
-    // Update user with organization_id and set role to owner
     const { error: userError } = await supabase
       .from('users')
       .update({
@@ -242,26 +293,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: userError.message }
     }
 
-    // Refresh data
-    const user = await fetchUserProfile(state.supabaseUser.id)
-    setState(prev => ({
-      ...prev,
-      user,
-      organization: org as Organization,
-    }))
-
+    await refreshUser()
     return { error: null }
   }
 
   const refreshUser = async () => {
-    if (!state.supabaseUser) return
-
-    const user = await fetchUserProfile(state.supabaseUser.id)
-    let organization: Organization | null = null
-    if (user?.organization_id) {
-      organization = await fetchOrganization(user.organization_id)
-    }
-    setState(prev => ({ ...prev, user, organization }))
+    const { data: { session } } = await supabase.auth.getSession()
+    await bootstrapAuthState(session)
   }
 
   return (

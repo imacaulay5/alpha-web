@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppState } from '@/contexts/AppStateContext'
 import { getInvoices, getInvoice, createInvoice, updateInvoice, deleteInvoice, generateInvoiceNumber } from '@/services/invoices.service'
 import { getClients } from '@/services/clients.service'
-import type { Invoice, Client } from '@/types/models'
+import type { Invoice, Client, CreateInvoiceInput, CreateInvoiceLineItemInput } from '@/types/models'
 import { InvoiceStatus, invoiceStatusLabels } from '@/types/enums'
 
 // Load PDF utilities client-side only (react-pdf doesn't support SSR)
@@ -100,6 +100,8 @@ export default function InvoicesPage() {
     notes: '',
   })
 
+  const isCreateMode = !selectedInvoice
+
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { description: '', quantity: 1, rate: 0, amount: 0 }
   ])
@@ -142,6 +144,32 @@ export default function InvoicesPage() {
     setDialogOpen(true)
   }
 
+  const openEditDialog = (invoice: Invoice) => {
+    setSelectedInvoice(invoice)
+    setFormData({
+      client_id: invoice.client_id || '',
+      invoice_number: invoice.invoice_number || '',
+      issue_date: invoice.issue_date,
+      due_date: invoice.due_date,
+      tax_rate: String(invoice.tax_rate ?? 0),
+      notes: invoice.notes || '',
+    })
+    setLineItems(
+      invoice.line_items?.length
+        ? invoice.line_items
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .map((item) => ({
+              description: item.description,
+              quantity: item.quantity,
+              rate: item.rate,
+              amount: item.amount,
+            }))
+        : [{ description: '', quantity: 1, rate: 0, amount: 0 }]
+    )
+    setDialogOpen(true)
+  }
+
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
     const updated = [...lineItems]
     updated[index] = { ...updated[index], [field]: value }
@@ -177,25 +205,19 @@ export default function InvoicesPage() {
     setSaving(true)
 
     try {
-      const { subtotal, taxAmount, total } = calculateTotals()
-
-      const invoiceData = {
+      const invoiceData: CreateInvoiceInput = {
         user_id: user?.id,
         organization_id: user?.organization_id,
         client_id: formData.client_id || undefined,
-        invoice_number: formData.invoice_number,
+        invoice_number: formData.invoice_number.trim() || undefined,
         issue_date: formData.issue_date,
         due_date: formData.due_date,
-        subtotal,
         tax_rate: parseFloat(formData.tax_rate) || 0,
-        tax_amount: taxAmount,
-        total,
         currency: 'USD',
-        status: InvoiceStatus.draft,
         notes: formData.notes || undefined,
       }
 
-      const lineItemsData = lineItems
+      const lineItemsData: Omit<CreateInvoiceLineItemInput, 'invoice_id'>[] = lineItems
         .filter(item => item.description)
         .map((item, index) => ({
           description: item.description,
@@ -206,10 +228,13 @@ export default function InvoicesPage() {
         }))
 
       if (selectedInvoice) {
-        await updateInvoice(selectedInvoice.id, invoiceData)
+        await updateInvoice(selectedInvoice.id, {
+          ...invoiceData,
+          invoice_number: formData.invoice_number.trim() || undefined,
+        })
         toast.success('Invoice updated')
       } else {
-        await createInvoice(invoiceData as any, lineItemsData)
+        await createInvoice(invoiceData, lineItemsData)
         toast.success('Invoice created')
       }
       setDialogOpen(false)
@@ -451,6 +476,14 @@ export default function InvoicesPage() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        onClick={() => openEditDialog(invoice)}
+                        title="Edit Invoice"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => {
                           setSelectedInvoice(invoice)
                           setDeleteDialogOpen(true)
@@ -471,8 +504,10 @@ export default function InvoicesPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>New Invoice</DialogTitle>
-            <DialogDescription>Create a new invoice for your client</DialogDescription>
+            <DialogTitle>{isCreateMode ? 'New Invoice' : 'Edit Invoice'}</DialogTitle>
+            <DialogDescription>
+              {isCreateMode ? 'Create a new invoice for your client' : 'Update invoice details'}
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
@@ -483,8 +518,12 @@ export default function InvoicesPage() {
                     id="invoice_number"
                     value={formData.invoice_number}
                     onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
-                    required
+                    required={!isCreateMode}
+                    placeholder={isCreateMode ? 'Leave blank to let the server assign it' : undefined}
                   />
+                  {isCreateMode && (
+                    <p className="text-xs text-muted-foreground">Optional on create — the server can assign the invoice number.</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="client">Client</Label>
@@ -625,7 +664,7 @@ export default function InvoicesPage() {
               </Button>
               <Button type="submit" disabled={saving}>
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Invoice
+                {isCreateMode ? 'Create Invoice' : 'Save Changes'}
               </Button>
             </DialogFooter>
           </form>

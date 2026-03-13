@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -20,7 +20,25 @@ type OrganizationFormData = z.infer<typeof organizationSchema>
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const { createOrganization, isLoading } = useAuth()
+  const { createOrganization, isAuthenticated, isLoading, recoveryPath, session } = useAuth()
+
+  useEffect(() => {
+    if (isLoading) return
+
+    if (!session) {
+      router.replace('/login')
+      return
+    }
+
+    if (isAuthenticated) {
+      router.replace('/dashboard')
+      return
+    }
+
+    if (recoveryPath && recoveryPath !== '/onboarding') {
+      router.replace(recoveryPath)
+    }
+  }, [isAuthenticated, isLoading, recoveryPath, router, session])
   const [error, setError] = useState<string | null>(null)
 
   const {
@@ -37,7 +55,7 @@ export default function OnboardingPage() {
     if (result.error) {
       setError(result.error)
     } else {
-      router.push('/dashboard')
+      router.push('/')
     }
   }
 

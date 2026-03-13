@@ -62,16 +62,25 @@ export default function DashboardLayout({
 }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { logout, user, isLoading, isAuthenticated } = useAuth()
+  const { logout, user, isLoading, isAuthenticated, recoveryPath, session } = useAuth()
   const { visibleTabs, organization } = useAppState()
   const { theme, setTheme } = useTheme()
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!isLoading) {
+      if (isAuthenticated) {
+        return
+      }
+
+      if (session && recoveryPath) {
+        router.replace(recoveryPath)
+        return
+      }
+
       router.replace('/login')
     }
-  }, [isLoading, isAuthenticated, router])
+  }, [isLoading, isAuthenticated, recoveryPath, router, session])
 
   if (isLoading) {
     return (

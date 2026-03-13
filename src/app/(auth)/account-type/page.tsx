@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { AccountType, accountTypeLabels } from '@/types/enums'
@@ -35,7 +35,25 @@ const accountTypeOptions = [
 
 export default function AccountTypeSelectionPage() {
   const router = useRouter()
-  const { setAccountType, isLoading } = useAuth()
+  const { setAccountType, isAuthenticated, isLoading, recoveryPath, session } = useAuth()
+  
+  useEffect(() => {
+    if (isLoading) return
+
+    if (!session) {
+      router.replace('/login')
+      return
+    }
+
+    if (isAuthenticated) {
+      router.replace('/dashboard')
+      return
+    }
+
+    if (recoveryPath && recoveryPath !== '/account-type') {
+      router.replace(recoveryPath)
+    }
+  }, [isAuthenticated, isLoading, recoveryPath, router, session])
   const [selectedType, setSelectedType] = useState<AccountType | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -49,7 +67,7 @@ export default function AccountTypeSelectionPage() {
     } else if (selectedType === AccountType.business) {
       router.push('/onboarding')
     } else {
-      router.push('/dashboard')
+      router.push('/')
     }
   }
 
