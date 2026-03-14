@@ -532,7 +532,7 @@ export type UpdateTaskInput = Partial<CreateTaskInput>
 export type CreateTimeEntryInput = Omit<TimeEntry, 'id' | 'created_at' | 'updated_at' | 'project' | 'task' | 'user'>
 export type UpdateTimeEntryInput = Partial<CreateTimeEntryInput>
 
-export type CreateInvoiceInput = Pick<Invoice, 'organization_id' | 'user_id' | 'client_id' | 'project_id' | 'issue_date' | 'due_date' | 'tax_rate' | 'currency' | 'notes'> & {
+export type CreateInvoiceInput = Pick<Invoice, 'organization_id' | 'user_id' | 'client_id' | 'project_id' | 'issue_date' | 'due_date' | 'subtotal' | 'tax_rate' | 'tax_amount' | 'total' | 'currency' | 'notes' | 'status'> & {
   invoice_number?: string
 }
 

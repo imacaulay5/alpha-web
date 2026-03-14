@@ -31,9 +31,9 @@ function normalizeInvoiceStatus(status: unknown): InvoiceStatus {
   }
 }
 
-function serializeInvoiceStatus(status: InvoiceStatus | string | undefined): InvoiceStatus | undefined {
+function serializeInvoiceStatus(status: InvoiceStatus | string | undefined): string | undefined {
   if (!status) return undefined
-  return normalizeInvoiceStatus(status)
+  return normalizeInvoiceStatus(status).toUpperCase()
 }
 
 function mapInvoiceLineItem(row: unknown): InvoiceLineItem {
@@ -89,8 +89,12 @@ function toInvoiceInsert(input: CreateInvoiceInput) {
     invoice_number: input.invoice_number,
     issue_date: input.issue_date,
     due_date: input.due_date,
+    subtotal: input.subtotal,
     tax_rate: input.tax_rate,
+    tax_amount: input.tax_amount,
+    total: input.total,
     currency: input.currency,
+    status: serializeInvoiceStatus(input.status) ?? 'DRAFT',
     notes: input.notes,
   }
 }

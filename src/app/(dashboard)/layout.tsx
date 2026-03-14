@@ -62,27 +62,27 @@ export default function DashboardLayout({
 }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { logout, user, isLoading, isAuthenticated, recoveryPath, session } = useAuth()
+  const { logout, user, isLoading, isAuthenticated, isProfileReady, recoveryPath, session } = useAuth()
   const { visibleTabs, organization } = useAppState()
   const { theme, setTheme } = useTheme()
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
-    if (!isLoading) {
-      if (isAuthenticated) {
-        return
-      }
-
-      if (session && recoveryPath) {
-        router.replace(recoveryPath)
-        return
-      }
-
-      router.replace('/login')
+    if (isLoading) {
+      return
     }
-  }, [isLoading, isAuthenticated, recoveryPath, router, session])
 
-  if (isLoading) {
+    if (session) {
+      if (recoveryPath) {
+        router.replace(recoveryPath)
+      }
+      return
+    }
+
+    router.replace('/login')
+  }, [isLoading, recoveryPath, router, session])
+
+  if (isLoading || (session && !isProfileReady && !recoveryPath)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -91,7 +91,11 @@ export default function DashboardLayout({
   }
 
   if (!isAuthenticated) {
-    return null
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   const handleLogout = async () => {
