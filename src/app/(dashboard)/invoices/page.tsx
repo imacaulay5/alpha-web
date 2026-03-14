@@ -7,7 +7,7 @@ import { useAppState } from '@/contexts/AppStateContext'
 import { getInvoices, getInvoice, createInvoice, updateInvoice, deleteInvoice, generateInvoiceNumber } from '@/services/invoices.service'
 import { getClients } from '@/services/clients.service'
 import type { Invoice, Client, CreateInvoiceInput, CreateInvoiceLineItemInput } from '@/types/models'
-import { InvoiceStatus, invoiceStatusLabels } from '@/types/enums'
+import { AccountType, InvoiceStatus, invoiceStatusLabels } from '@/types/enums'
 
 // Load PDF utilities client-side only (react-pdf doesn't support SSR)
 const PDFPreviewDialog = dynamic(() => import('@/components/PDFPreviewDialog'), { ssr: false })
@@ -206,14 +206,18 @@ export default function InvoicesPage() {
 
     try {
       const invoiceData: CreateInvoiceInput = {
-        user_id: user?.id,
+        user_id: user?.account_type === AccountType.business ? undefined : user?.id,
         organization_id: user?.organization_id,
         client_id: formData.client_id || undefined,
         invoice_number: formData.invoice_number.trim() || undefined,
         issue_date: formData.issue_date,
         due_date: formData.due_date,
+        subtotal,
         tax_rate: parseFloat(formData.tax_rate) || 0,
+        tax_amount: taxAmount,
+        total,
         currency: 'USD',
+        status: InvoiceStatus.draft,
         notes: formData.notes || undefined,
       }
 

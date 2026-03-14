@@ -147,52 +147,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const bootstrapAuthState = async (session: Session | null) => {
-    if (!session?.user) {
+    try {
+      if (!session?.user) {
+        setState({
+          session: null,
+          supabaseUser: null,
+          user: null,
+          organization: null,
+          isLoading: false,
+          isAuthenticated: false,
+          isProfileReady: false,
+          recoveryPath: null,
+          error: null,
+        })
+        return
+      }
+
+      const user = await repairUserProfile(session.user)
+      let organization: Organization | null = null
+
+      if (user?.organization_id) {
+        organization = await fetchOrganization(user.organization_id)
+      }
+
+      const recoveryPath = getRecoveryPath(user)
+
       setState({
-        session: null,
-        supabaseUser: null,
+        session,
+        supabaseUser: session.user,
+        user,
+        organization,
+        isLoading: false,
+        isAuthenticated: Boolean(user) && !recoveryPath,
+        isProfileReady: Boolean(user) && !recoveryPath,
+        recoveryPath,
+        error: user ? null : 'We could not finish loading your profile.',
+      })
+    } catch (error) {
+      console.error('Error bootstrapping auth state:', error)
+      setState({
+        session,
+        supabaseUser: session?.user ?? null,
         user: null,
         organization: null,
         isLoading: false,
         isAuthenticated: false,
         isProfileReady: false,
         recoveryPath: null,
-        error: null,
+        error: 'We could not finish loading your profile.',
       })
-      return
     }
-
-    const user = await repairUserProfile(session.user)
-    let organization: Organization | null = null
-
-    if (user?.organization_id) {
-      organization = await fetchOrganization(user.organization_id)
-    }
-
-    const recoveryPath = getRecoveryPath(user)
-
-    setState({
-      session,
-      supabaseUser: session.user,
-      user,
-      organization,
-      isLoading: false,
-      isAuthenticated: Boolean(user) && !recoveryPath,
-      isProfileReady: Boolean(user) && !recoveryPath,
-      recoveryPath,
-      error: user ? null : 'We could not finish loading your profile.',
-    })
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      await bootstrapAuthState(session)
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      void bootstrapAuthState(session)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'USER_UPDATED') {
-          await bootstrapAuthState(session)
+          void bootstrapAuthState(session)
         } else if (event === 'SIGNED_OUT') {
           setState({
             session: null,
