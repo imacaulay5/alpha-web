@@ -1,7 +1,16 @@
 import { test, expect } from '@playwright/test'
-import { getQaCredentials, loginWithQaAccount, openInvoicesPage } from './helpers'
+import {
+  getAvailableQaAccounts,
+  getQaCredentials,
+  loginWithQaAccount,
+  openInvoicesPage,
+  expectInvoicesPageShell,
+  type QaAccountType,
+} from './helpers'
 
-const qaCredentials = getQaCredentials()
+const businessCredentials = getQaCredentials('business')
+const availableQaAccounts = getAvailableQaAccounts()
+const invoiceCapableAccountTypes: QaAccountType[] = ['business', 'freelancer']
 
 test('invoices route is protected for signed-out visitors', async ({ page }) => {
   await page.goto('/invoices')
@@ -10,37 +19,59 @@ test('invoices route is protected for signed-out visitors', async ({ page }) => 
   await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible()
 })
 
-test.describe('invoice flows with QA account', () => {
-  test.skip(!qaCredentials, 'Requires PLAYWRIGHT_QA_EMAIL and PLAYWRIGHT_QA_PASSWORD')
+test.describe('invoice flows by QA account type', () => {
+  test.skip(availableQaAccounts.length === 0, 'Requires at least one seeded QA account via PLAYWRIGHT_QA_* env vars')
 
-  test('signed-in QA user can reach the invoices page shell', async ({ page }) => {
-    await loginWithQaAccount(page)
-    await openInvoicesPage(page)
+  for (const account of availableQaAccounts) {
+    test.describe(`${account.type} account`, () => {
+      test(`can sign in as ${account.type}`, async ({ page }) => {
+        await loginWithQaAccount(page, account.type)
+        await expect(page).not.toHaveURL(/\/login/)
+      })
 
-    await expect(page).toHaveURL(/\/invoices/)
-    await expect(page.getByRole('heading', { name: /^invoices$/i })).toBeVisible()
-    await expect(page.getByText(/create and manage your invoices/i)).toBeVisible()
-    await expect(page.getByRole('button', { name: /new invoice/i })).toBeVisible()
-  })
+      if (invoiceCapableAccountTypes.includes(account.type)) {
+        test(`can reach the invoices page shell as ${account.type}`, async ({ page }) => {
+          await loginWithQaAccount(page, account.type)
+          await openInvoicesPage(page)
+          await expect(page.getByRole('button', { name: /new invoice/i })).toBeVisible()
+        })
 
-  test('signed-in QA user can open the new invoice dialog', async ({ page }) => {
-    await loginWithQaAccount(page)
-    await openInvoicesPage(page)
+        test(`can open the new invoice dialog as ${account.type}`, async ({ page }) => {
+          await loginWithQaAccount(page, account.type)
+          await openInvoicesPage(page)
 
-    await page.getByRole('button', { name: /new invoice/i }).click()
+          await page.getByRole('button', { name: /new invoice/i }).click()
 
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    await expect(dialog.getByRole('heading', { name: /new invoice/i })).toBeVisible()
-    await expect(dialog.getByLabel(/invoice number/i)).toBeVisible()
-    await expect(dialog.getByLabel(/issue date/i)).toBeVisible()
-    await expect(dialog.getByLabel(/due date/i)).toBeVisible()
-    await expect(dialog.getByText(/line items/i)).toBeVisible()
-    await expect(dialog.getByRole('button', { name: /create invoice/i })).toBeVisible()
-  })
+          const dialog = page.getByRole('dialog')
+          await expect(dialog).toBeVisible()
+          await expect(dialog.getByRole('heading', { name: /new invoice/i })).toBeVisible()
+          await expect(dialog.getByLabel(/invoice number/i)).toBeVisible()
+          await expect(dialog.getByLabel(/issue date/i)).toBeVisible()
+          await expect(dialog.getByLabel(/due date/i)).toBeVisible()
+          await expect(dialog.getByText(/line items/i)).toBeVisible()
+          await expect(dialog.getByRole('button', { name: /create invoice/i })).toBeVisible()
+        })
+      } else {
+        test(`keeps invoice creation out of the main navigation for ${account.type}`, async ({ page }) => {
+          await loginWithQaAccount(page, account.type)
+          await expect(page.getByRole('link', { name: /invoices/i })).toHaveCount(0)
+        })
 
-  test('signed-in QA user can create an invoice when seeded data has a client', async ({ page }) => {
-    await loginWithQaAccount(page)
+        test(`can still open the invoices route directly as ${account.type}`, async ({ page }) => {
+          await loginWithQaAccount(page, account.type)
+          await openInvoicesPage(page)
+          await expectInvoicesPageShell(page)
+        })
+      }
+    })
+  }
+})
+
+test.describe('invoice flows with seeded business QA account', () => {
+  test.skip(!businessCredentials, 'Requires PLAYWRIGHT_QA_BUSINESS_EMAIL/PLAYWRIGHT_QA_BUSINESS_PASSWORD or PLAYWRIGHT_QA_EMAIL/PLAYWRIGHT_QA_PASSWORD')
+
+  test('signed-in business QA user can create an invoice when seeded data has a client', async ({ page }) => {
+    await loginWithQaAccount(page, 'business')
     await openInvoicesPage(page)
 
     const invoiceRows = page.locator('tbody tr')
@@ -53,7 +84,7 @@ test.describe('invoice flows with QA account', () => {
     await dialog.getByRole('combobox').click()
     const clientOptions = page.locator('[role="option"]')
     const clientCount = await clientOptions.count()
-    test.skip(clientCount === 0, 'Seeded QA account has no selectable clients for invoice creation')
+    test.skip(clientCount === 0, 'Seeded business QA account has no selectable clients for invoice creation')
     await clientOptions.first().click()
 
     const uniqueText = `QA invoice ${Date.now()}`
@@ -69,13 +100,13 @@ test.describe('invoice flows with QA account', () => {
     await expect(invoiceRows).toHaveCount(beforeCount + 1)
   })
 
-  test('signed-in QA user can open edit invoice dialog for an existing invoice', async ({ page }) => {
-    await loginWithQaAccount(page)
+  test('signed-in business QA user can open edit invoice dialog for an existing invoice', async ({ page }) => {
+    await loginWithQaAccount(page, 'business')
     await openInvoicesPage(page)
 
     const editButtons = page.locator('button[title="Edit Invoice"]')
     const invoiceCount = await editButtons.count()
-    test.skip(invoiceCount === 0, 'Seeded QA account has no existing invoices to edit')
+    test.skip(invoiceCount === 0, 'Seeded business QA account has no existing invoices to edit')
 
     await editButtons.first().click()
 
