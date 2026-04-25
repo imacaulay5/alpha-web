@@ -159,11 +159,11 @@ export const roleLabels: Record<Role, string> = {
 // ============================================================
 
 export enum TimeEntryStatus {
-  draft = 'draft',
-  submitted = 'submitted',
-  approved = 'approved',
-  rejected = 'rejected',
-  invoiced = 'invoiced',
+  draft = 'DRAFT',
+  submitted = 'SUBMITTED',
+  approved = 'APPROVED',
+  rejected = 'REJECTED',
+  invoiced = 'INVOICED',
 }
 
 export const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
@@ -179,10 +179,10 @@ export const timeEntryStatusLabels: Record<TimeEntryStatus, string> = {
 // ============================================================
 
 export enum TimeEntrySource {
-  mobile = 'mobile',
-  web = 'web',
-  imported = 'imported',
-  api = 'api',
+  mobile = 'MOBILE',
+  web = 'WEB',
+  imported = 'IMPORT',
+  api = 'API',
 }
 
 // ============================================================
@@ -190,11 +190,11 @@ export enum TimeEntrySource {
 // ============================================================
 
 export enum InvoiceStatus {
-  draft = 'draft',
-  sent = 'sent',
-  paid = 'paid',
-  overdue = 'overdue',
-  cancelled = 'cancelled',
+  draft = 'DRAFT',
+  sent = 'SENT',
+  paid = 'PAID',
+  overdue = 'OVERDUE',
+  cancelled = 'CANCELLED',
 }
 
 export const invoiceStatusLabels: Record<InvoiceStatus, string> = {
@@ -210,11 +210,11 @@ export const invoiceStatusLabels: Record<InvoiceStatus, string> = {
 // ============================================================
 
 export enum ExpenseStatus {
-  draft = 'draft',
-  submitted = 'submitted',
-  approved = 'approved',
-  rejected = 'rejected',
-  reimbursed = 'reimbursed',
+  draft = 'DRAFT',
+  submitted = 'SUBMITTED',
+  approved = 'APPROVED',
+  rejected = 'REJECTED',
+  reimbursed = 'REIMBURSED',
 }
 
 export const expenseStatusLabels: Record<ExpenseStatus, string> = {
@@ -230,14 +230,14 @@ export const expenseStatusLabels: Record<ExpenseStatus, string> = {
 // ============================================================
 
 export enum ExpenseCategory {
-  officeSupplies = 'office_supplies',
-  travel = 'travel',
-  meals = 'meals',
-  software = 'software',
-  hardware = 'hardware',
-  marketing = 'marketing',
-  utilities = 'utilities',
-  other = 'other',
+  officeSupplies = 'OFFICE_SUPPLIES',
+  travel = 'TRAVEL',
+  meals = 'MEALS',
+  software = 'SOFTWARE',
+  hardware = 'HARDWARE',
+  marketing = 'MARKETING',
+  utilities = 'UTILITIES',
+  other = 'OTHER',
 }
 
 export const expenseCategoryLabels: Record<ExpenseCategory, string> = {
@@ -256,12 +256,12 @@ export const expenseCategoryLabels: Record<ExpenseCategory, string> = {
 // ============================================================
 
 export enum BillingModel {
-  hourly = 'hourly',
-  fixed = 'fixed',
-  retainer = 'retainer',
-  milestone = 'milestone',
-  taskBased = 'task_based',
-  notBillable = 'not_billable',
+  hourly = 'HOURLY',
+  fixed = 'FIXED',
+  retainer = 'RETAINER',
+  milestone = 'MILESTONE',
+  taskBased = 'TASK_BASED',
+  notBillable = 'NOT_BILLABLE',
 }
 
 export const billingModelLabels: Record<BillingModel, string> = {

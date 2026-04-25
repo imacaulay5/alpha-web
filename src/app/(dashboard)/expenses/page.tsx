@@ -63,6 +63,18 @@ function getStatusVariant(status: ExpenseStatus): 'default' | 'secondary' | 'des
   }
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message
+  }
+
+  return fallback
+}
+
 export default function ExpensesPage() {
   const { user } = useAuth()
   const [expenses, setExpenses] = useState<Expense[]>([])
@@ -163,7 +175,8 @@ export default function ExpensesPage() {
       setDialogOpen(false)
       loadData()
     } catch (error) {
-      toast.error('Failed to save expense')
+      console.error('Failed to save expense:', JSON.stringify(error, null, 2), error)
+      toast.error(getErrorMessage(error, 'Failed to save expense'))
     } finally {
       setSaving(false)
     }
@@ -179,7 +192,8 @@ export default function ExpensesPage() {
       setSelectedExpense(null)
       loadData()
     } catch (error) {
-      toast.error('Failed to delete expense')
+      console.error('Failed to delete expense:', JSON.stringify(error, null, 2), error)
+      toast.error(getErrorMessage(error, 'Failed to delete expense'))
     }
   }
 

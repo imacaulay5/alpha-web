@@ -8,7 +8,12 @@ let browserClient: ReturnType<typeof createBrowserClient> | null = null
 
 export function getSupabaseClient() {
   if (!browserClient) {
-    browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey)
+    browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        lock: async <R,>(_name: string, _acquireTimeout: number, fn: () => Promise<R>) => fn(),
+        lockAcquireTimeout: 3000,
+      },
+    })
   }
   return browserClient
 }
