@@ -1,8 +1,12 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppState } from '@/contexts/AppStateContext'
-import { AccountType, Capability } from '@/types/enums'
+import { getBills } from '@/services/bills.service'
+import { getExpenses } from '@/services/expenses.service'
+import type { Bill, Expense } from '@/types/models'
+import { AccountType, BillStatus, Capability, ExpenseStatus } from '@/types/enums'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -21,17 +25,107 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { getQuickActions } from '@/lib/quick-actions'
+import { addDays, differenceInDays, endOfMonth, formatDistanceToNow, isAfter, isBefore, parseISO, startOfMonth } from 'date-fns'
 
-// Personal account dashboard stats
-const personalStats = [
-  { title: 'Upcoming Bills', value: '5', change: '3 due this week', trend: 'up', icon: CalendarClock },
-  { title: 'Bills This Month', value: '$1,234', change: '+5.2%', trend: 'up', icon: CreditCard },
-  { title: 'Payments Made', value: '12', change: '-2.1%', trend: 'down', icon: DollarSign },
-  { title: 'Monthly Spending', value: '$2,890', change: '-4.5%', trend: 'down', icon: Receipt },
-]
+type DashboardStat = {
+  title: string
+  value: string
+  change: string
+  trend: 'up' | 'down'
+  icon: typeof CalendarClock
+}
+
+type RecentActivity = {
+  id: string
+  message: string
+  time: string
+  status: 'success' | 'warning'
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
+}
+
+function getPersonalStats(bills: Bill[], expenses: Expense[]): DashboardStat[] {
+  const now = new Date()
+  const weekFromNow = addDays(now, 7)
+  const monthStart = startOfMonth(now)
+  const monthEnd = endOfMonth(now)
+
+  const unpaidBills = bills.filter(
+    bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
+  )
+  const dueThisWeek = unpaidBills.filter((bill) => {
+    const dueDate = parseISO(bill.due_date)
+    return !isBefore(dueDate, now) && !isAfter(dueDate, weekFromNow)
+  })
+  const paidThisMonth = bills.filter((bill) => {
+    if (bill.status !== BillStatus.paid || !bill.paid_at) return false
+    const paidAt = parseISO(bill.paid_at)
+    return !isBefore(paidAt, monthStart) && !isAfter(paidAt, monthEnd)
+  })
+  const expensesThisMonth = expenses.filter((expense) => {
+    const expenseDate = parseISO(expense.expense_date)
+    return !isBefore(expenseDate, monthStart) && !isAfter(expenseDate, monthEnd)
+  })
+
+  return [
+    {
+      title: 'Upcoming Bills',
+      value: unpaidBills.length.toString(),
+      change: `${dueThisWeek.length} due this week`,
+      trend: dueThisWeek.length > 0 ? 'up' : 'down',
+      icon: CalendarClock,
+    },
+    {
+      title: 'Bills Due',
+      value: formatCurrency(unpaidBills.reduce((sum, bill) => sum + bill.amount, 0)),
+      change: `${unpaidBills.length} unpaid`,
+      trend: unpaidBills.length > 0 ? 'up' : 'down',
+      icon: CreditCard,
+    },
+    {
+      title: 'Payments Made',
+      value: paidThisMonth.length.toString(),
+      change: `${formatCurrency(paidThisMonth.reduce((sum, bill) => sum + bill.amount, 0))} this month`,
+      trend: 'down',
+      icon: DollarSign,
+    },
+    {
+      title: 'Monthly Spending',
+      value: formatCurrency(expensesThisMonth.reduce((sum, expense) => sum + expense.amount, 0)),
+      change: `${expensesThisMonth.length} expenses`,
+      trend: expensesThisMonth.length > 0 ? 'up' : 'down',
+      icon: Receipt,
+    },
+  ]
+}
+
+function getRecentPersonalActivity(bills: Bill[], expenses: Expense[]): RecentActivity[] {
+  const billActivities = bills.map((bill) => ({
+    id: `bill-${bill.id}`,
+    message: `${bill.status === BillStatus.paid ? 'Paid' : 'Added'} bill: ${bill.name}`,
+    time: formatDistanceToNow(parseISO(bill.updated_at || bill.created_at), { addSuffix: true }),
+    status: bill.status === BillStatus.overdue ? 'warning' as const : 'success' as const,
+    date: parseISO(bill.updated_at || bill.created_at),
+  }))
+
+  const expenseActivities = expenses.map((expense) => ({
+    id: `expense-${expense.id}`,
+    message: `Recorded expense: ${expense.merchant || expense.description || 'Expense'}`,
+    time: formatDistanceToNow(parseISO(expense.updated_at || expense.created_at), { addSuffix: true }),
+    status: expense.status === ExpenseStatus.rejected ? 'warning' as const : 'success' as const,
+    date: parseISO(expense.updated_at || expense.created_at),
+  }))
+
+  return [...billActivities, ...expenseActivities]
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .slice(0, 4)
+    .map(({ date: _date, ...activity }) => activity)
+}
 
 // Freelancer account dashboard stats
-const freelancerStats = [
+const freelancerStats: DashboardStat[] = [
   { title: 'Billable Hours', value: '142h', change: '+12.5%', trend: 'up', icon: Clock },
   { title: 'Revenue MTD', value: '$8,450', change: '+18.3%', trend: 'up', icon: DollarSign },
   { title: 'Outstanding', value: '$2,340', change: '-8.2%', trend: 'down', icon: FileText },
@@ -39,7 +133,7 @@ const freelancerStats = [
 ]
 
 // Business account dashboard stats
-const businessStats = [
+const businessStats: DashboardStat[] = [
   { title: 'Revenue MTD', value: '$45,670', change: '+22.5%', trend: 'up', icon: DollarSign },
   { title: 'Profit Margin', value: '32%', change: '+4.2%', trend: 'up', icon: TrendingUp },
   { title: 'Team Hours', value: '1,245h', change: '+8.3%', trend: 'up', icon: Clock },
@@ -50,31 +144,72 @@ export default function DashboardPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { hasCapability } = useAppState()
+  const [personalBills, setPersonalBills] = useState<Bill[]>([])
+  const [personalExpenses, setPersonalExpenses] = useState<Expense[]>([])
+  const [personalDashboardError, setPersonalDashboardError] = useState<string | null>(null)
 
   const accountType = user?.account_type || AccountType.personal
 
-  const getStatsForAccountType = () => {
+  useEffect(() => {
+    if (accountType !== AccountType.personal) return
+
+    let isMounted = true
+
+    const loadPersonalDashboard = async () => {
+      try {
+        const [bills, expenses] = await Promise.all([getBills(), getExpenses()])
+        if (!isMounted) return
+        setPersonalBills(bills)
+        setPersonalExpenses(expenses)
+        setPersonalDashboardError(null)
+      } catch (error) {
+        if (!isMounted) return
+        setPersonalDashboardError(error instanceof Error ? error.message : 'Failed to load dashboard data')
+      }
+    }
+
+    loadPersonalDashboard()
+
+    return () => {
+      isMounted = false
+    }
+  }, [accountType])
+
+  const getStatsForAccountType = (): DashboardStat[] => {
     switch (accountType) {
       case AccountType.personal:
-        return personalStats
+        return getPersonalStats(personalBills, personalExpenses)
       case AccountType.freelancer:
         return freelancerStats
       case AccountType.business:
         return businessStats
       default:
-        return personalStats
+        return getPersonalStats(personalBills, personalExpenses)
     }
   }
 
   const stats = getStatsForAccountType()
   const quickActions = getQuickActions(accountType)
 
-  const recentActivities = [
-    { id: 1, message: 'Logged 4 hours on Project Alpha', time: '2 mins ago', status: 'success' },
-    { id: 2, message: 'Invoice #INV-042 sent to Acme Corp', time: '1 hour ago', status: 'success' },
-    { id: 3, message: 'Expense report pending approval', time: '3 hours ago', status: 'warning' },
-    { id: 4, message: 'New project created: Website Redesign', time: '1 day ago', status: 'success' },
-  ]
+  const recentActivities =
+    accountType === AccountType.personal
+      ? getRecentPersonalActivity(personalBills, personalExpenses)
+      : [
+          { id: 'time-1', message: 'Logged 4 hours on Project Alpha', time: '2 mins ago', status: 'success' as const },
+          { id: 'invoice-1', message: 'Invoice #INV-042 sent to Acme Corp', time: '1 hour ago', status: 'success' as const },
+          { id: 'expense-1', message: 'Expense report pending approval', time: '3 hours ago', status: 'warning' as const },
+          { id: 'project-1', message: 'New project created: Website Redesign', time: '1 day ago', status: 'success' as const },
+        ]
+
+  const unpaidBills = personalBills.filter(
+    bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
+  )
+  const overdueBills = unpaidBills.filter(bill => differenceInDays(parseISO(bill.due_date), new Date()) < 0)
+  const billsDueThisWeek = unpaidBills.filter((bill) => {
+    const dueDate = parseISO(bill.due_date)
+    return !isBefore(dueDate, new Date()) && !isAfter(dueDate, addDays(new Date(), 7))
+  })
+  const pendingExpenses = personalExpenses.filter(expense => expense.status === ExpenseStatus.submitted)
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -122,6 +257,14 @@ export default function DashboardPage() {
       </Card>
 
       {/* Stats */}
+      {personalDashboardError && (
+        <Card>
+          <CardContent className="py-4 text-sm text-destructive">
+            {personalDashboardError}
+          </CardContent>
+        </Card>
+      )}
+
       <div className={`grid grid-cols-1 md:grid-cols-2 ${stats.length > 2 ? 'lg:grid-cols-4' : ''} gap-6`}>
         {stats.map((stat, index) => (
           <Card key={index}>
@@ -137,7 +280,7 @@ export default function DashboardPage() {
                 ) : (
                   <TrendingDown className="h-3 w-3 text-red-500" />
                 )}
-                {stat.change} from last month
+                {stat.change}
               </p>
             </CardContent>
           </Card>
@@ -152,7 +295,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentActivities.map((activity) => (
+              {recentActivities.length > 0 ? recentActivities.map((activity) => (
                 <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50">
                   {getStatusIcon(activity.status)}
                   <div className="flex-1 min-w-0">
@@ -160,7 +303,9 @@ export default function DashboardPage() {
                     <p className="text-xs text-muted-foreground mt-1">{activity.time}</p>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <p className="text-sm text-muted-foreground">No recent activity yet</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -175,11 +320,15 @@ export default function DashboardPage() {
                 <>
                   <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                     <span className="text-sm">Overdue Bills</span>
-                    <Badge variant="destructive">1</Badge>
+                    <Badge variant="destructive">
+                      {accountType === AccountType.personal ? overdueBills.length : 1}
+                    </Badge>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                     <span className="text-sm">Due This Week</span>
-                    <Badge variant="secondary">3</Badge>
+                    <Badge variant="secondary">
+                      {accountType === AccountType.personal ? billsDueThisWeek.length : 3}
+                    </Badge>
                   </div>
                 </>
               )}
@@ -204,7 +353,9 @@ export default function DashboardPage() {
               {hasCapability(Capability.viewOwnExpenses) && (
                 <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                   <span className="text-sm">Pending Expenses</span>
-                  <Badge variant="secondary">3</Badge>
+                  <Badge variant="secondary">
+                    {accountType === AccountType.personal ? pendingExpenses.length : 3}
+                  </Badge>
                 </div>
               )}
               {accountType === AccountType.business && hasCapability(Capability.viewTeamActivity) && (
