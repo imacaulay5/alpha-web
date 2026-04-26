@@ -5,6 +5,8 @@ import type { Invoice, InvoiceLineItem, CreateInvoiceInput, UpdateInvoiceInput, 
 export interface InvoiceFilters {
   status?: string
   clientId?: string
+  userId?: string
+  organizationId?: string | null
 }
 
 type InvoiceRow = Record<string, unknown>
@@ -138,6 +140,11 @@ export async function getInvoices(filters?: InvoiceFilters): Promise<Invoice[]> 
   if (filters?.clientId) {
     query = query.eq('client_id', filters.clientId)
   }
+  if (filters?.organizationId) {
+    query = query.eq('organization_id', filters.organizationId)
+  } else if (filters?.userId) {
+    query = query.eq('user_id', filters.userId)
+  }
 
   const { data, error } = await query
 
@@ -157,6 +164,19 @@ export async function getInvoice(id: string): Promise<Invoice | null> {
   return data ? mapInvoice(data) : null
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs)
+  })
+
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    clearTimeout(timeoutId!)
+  }
+}
+
 export async function createInvoice(input: CreateInvoiceInput, lineItems: Omit<CreateInvoiceLineItemInput, 'invoice_id'>[]): Promise<Invoice> {
   const supabase = getSupabaseClient()
   const { data: invoice, error: invoiceError } = await supabase
@@ -170,11 +190,23 @@ export async function createInvoice(input: CreateInvoiceInput, lineItems: Omit<C
   if (lineItems.length > 0) {
     const lineItemsWithInvoiceId = lineItems.map((item, index) => toInvoiceLineItemInsert(item, invoice.id, index))
 
-    const { error: lineItemsError } = await supabase
-      .from('invoice_line_items')
-      .insert(lineItemsWithInvoiceId)
+    const { error: lineItemsError } = await withTimeout(
+      Promise.resolve(
+        supabase
+          .from('invoice_line_items')
+          .insert(lineItemsWithInvoiceId)
+      ),
+      5000,
+      'Saving invoice line items'
+    )
 
-    if (lineItemsError) throw lineItemsError
+    if (lineItemsError) {
+      await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', invoice.id)
+      throw lineItemsError
+    }
   }
 
   return mapInvoice(invoice)

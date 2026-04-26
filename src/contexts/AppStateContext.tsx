@@ -66,7 +66,7 @@ const allTabs: Tab[] = [
     label: 'Accounting',
     icon: 'BookOpen',
     path: '/accounting',
-    requiredCapabilities: [Capability.manageChartOfAccounts, Capability.recordJournalEntries, Capability.viewFinancialReports, Capability.viewFinancialStatements],
+    requiredCapabilities: [Capability.manageChartOfAccounts, Capability.recordJournalEntries],
   },
   {
     id: 'tax',
@@ -150,6 +150,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       }
       // Personal users don't create invoices -- they use Bills instead
       if (tab.id === 'invoices' && user.account_type === AccountType.personal) {
+        return false
+      }
+      // Hide business accounting for freelancer/contractor and personal accounts.
+      if (tab.id === 'accounting' && user.account_type !== AccountType.business) {
         return false
       }
       // Hide freelancer-focused tabs for business accounts

@@ -1,12 +1,25 @@
 import { getSupabaseClient } from '@/lib/supabase'
 import type { Client, CreateClientInput, UpdateClientInput } from '@/types/models'
 
-export async function getClients(): Promise<Client[]> {
+export interface ClientFilters {
+  userId?: string
+  organizationId?: string | null
+}
+
+export async function getClients(filters?: ClientFilters): Promise<Client[]> {
   const supabase = getSupabaseClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('clients')
     .select('*')
     .order('name')
+
+  if (filters?.organizationId) {
+    query = query.eq('organization_id', filters.organizationId)
+  } else if (filters?.userId) {
+    query = query.eq('user_id', filters.userId)
+  }
+
+  const { data, error } = await query
 
   if (error) throw error
   return data as Client[]

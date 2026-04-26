@@ -52,7 +52,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Plus, FileText, Pencil, Trash2, Loader2, DollarSign, Send, Download, Eye } from 'lucide-react'
 import { toast } from 'sonner'
-import { format, parseISO, addDays } from 'date-fns'
+import { format, addDays } from 'date-fns'
+import { formatDateOnly } from '@/lib/date-format'
 
 function getStatusVariant(status: InvoiceStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
@@ -107,15 +108,21 @@ export default function InvoicesPage() {
   ])
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (user) loadData()
+  }, [user?.id, user?.organization_id])
 
   const loadData = async () => {
     try {
       setError(null)
       const [invoicesData, clientsData] = await Promise.all([
-        getInvoices(),
-        getClients(),
+        getInvoices({
+          userId: user?.id,
+          organizationId: user?.organization_id,
+        }),
+        getClients({
+          userId: user?.id,
+          organizationId: user?.organization_id,
+        }),
       ])
       setInvoices(invoicesData)
       setClients(clientsData)
@@ -192,9 +199,9 @@ export default function InvoicesPage() {
     }
   }
 
-  const calculateTotals = () => {
+  const calculateTotals = (taxRateOverride?: number) => {
     const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0)
-    const taxRate = parseFloat(formData.tax_rate) || 0
+    const taxRate = taxRateOverride ?? (parseFloat(formData.tax_rate) || 0)
     const taxAmount = subtotal * (taxRate / 100)
     const total = subtotal + taxAmount
     return { subtotal, taxAmount, total }
@@ -205,20 +212,34 @@ export default function InvoicesPage() {
     setSaving(true)
 
     try {
+      const submitted = new FormData(e.currentTarget as HTMLFormElement)
+      const invoiceNumber = String(submitted.get('invoice_number') || formData.invoice_number)
+      const issueDate = String(submitted.get('issue_date') || formData.issue_date)
+      const dueDate = String(submitted.get('due_date') || formData.due_date)
+      const taxRate = parseFloat(String(submitted.get('tax_rate') || formData.tax_rate)) || 0
+      const notes = String(submitted.get('notes') || formData.notes)
+
+      if (!formData.client_id) {
+        toast.error('Select a client before creating an invoice')
+        return
+      }
+
+      const { subtotal, taxAmount, total } = calculateTotals(taxRate)
+
       const invoiceData: CreateInvoiceInput = {
         user_id: user?.account_type === AccountType.business ? undefined : user?.id,
         organization_id: user?.organization_id,
-        client_id: formData.client_id || undefined,
-        invoice_number: formData.invoice_number.trim() || undefined,
-        issue_date: formData.issue_date,
-        due_date: formData.due_date,
+        client_id: formData.client_id,
+        invoice_number: invoiceNumber.trim() || undefined,
+        issue_date: issueDate,
+        due_date: dueDate,
         subtotal,
-        tax_rate: parseFloat(formData.tax_rate) || 0,
+        tax_rate: taxRate,
         tax_amount: taxAmount,
         total,
         currency: 'USD',
         status: InvoiceStatus.draft,
-        notes: formData.notes || undefined,
+        notes: notes || undefined,
       }
 
       const lineItemsData: Omit<CreateInvoiceLineItemInput, 'invoice_id'>[] = lineItems
@@ -234,7 +255,7 @@ export default function InvoicesPage() {
       if (selectedInvoice) {
         await updateInvoice(selectedInvoice.id, {
           ...invoiceData,
-          invoice_number: formData.invoice_number.trim() || undefined,
+          invoice_number: invoiceNumber.trim() || undefined,
         })
         toast.success('Invoice updated')
       } else {
@@ -244,7 +265,8 @@ export default function InvoicesPage() {
       setDialogOpen(false)
       loadData()
     } catch (error) {
-      toast.error('Failed to save invoice')
+      console.error('Failed to save invoice:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to save invoice')
     } finally {
       setSaving(false)
     }
@@ -432,8 +454,8 @@ export default function InvoicesPage() {
                   <TableRow key={invoice.id}>
                     <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
                     <TableCell>{invoice.client?.name || '-'}</TableCell>
-                    <TableCell>{format(parseISO(invoice.issue_date), 'MMM d, yyyy')}</TableCell>
-                    <TableCell>{format(parseISO(invoice.due_date), 'MMM d, yyyy')}</TableCell>
+                    <TableCell>{formatDateOnly(invoice.issue_date)}</TableCell>
+                    <TableCell>{formatDateOnly(invoice.due_date)}</TableCell>
                     <TableCell className="text-right font-medium">
                       <span className="flex items-center justify-end gap-1">
                         <DollarSign className="w-3 h-3" />
@@ -520,6 +542,7 @@ export default function InvoicesPage() {
                   <Label htmlFor="invoice_number">Invoice Number</Label>
                   <Input
                     id="invoice_number"
+                    name="invoice_number"
                     value={formData.invoice_number}
                     onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
                     required={!isCreateMode}
@@ -538,8 +561,12 @@ export default function InvoicesPage() {
                     <SelectTrigger>
                       <SelectValue placeholder="Select a client" />
                     </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
+                  <SelectContent>
+                      {clients.length === 0 ? (
+                        <SelectItem value="__no_clients__" disabled>
+                          No clients available
+                        </SelectItem>
+                      ) : clients.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.name}
                         </SelectItem>
@@ -553,6 +580,7 @@ export default function InvoicesPage() {
                   <Label htmlFor="issue_date">Issue Date</Label>
                   <Input
                     id="issue_date"
+                    name="issue_date"
                     type="date"
                     value={formData.issue_date}
                     onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
@@ -563,6 +591,7 @@ export default function InvoicesPage() {
                   <Label htmlFor="due_date">Due Date</Label>
                   <Input
                     id="due_date"
+                    name="due_date"
                     type="date"
                     value={formData.due_date}
                     onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
@@ -573,6 +602,7 @@ export default function InvoicesPage() {
                   <Label htmlFor="tax_rate">Tax Rate (%)</Label>
                   <Input
                     id="tax_rate"
+                    name="tax_rate"
                     type="number"
                     step="0.01"
                     value={formData.tax_rate}
@@ -655,6 +685,7 @@ export default function InvoicesPage() {
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
+                  name="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={2}

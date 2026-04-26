@@ -47,7 +47,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Plus, Receipt, Pencil, Trash2, Loader2, DollarSign } from 'lucide-react'
 import { toast } from 'sonner'
-import { format, parseISO } from 'date-fns'
+import { format } from 'date-fns'
+import { formatDateOnly, dateInputValue } from '@/lib/date-format'
 
 function getStatusVariant(status: ExpenseStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
@@ -97,15 +98,18 @@ export default function ExpensesPage() {
   })
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (user) loadData()
+  }, [user?.id, user?.organization_id])
 
   const loadData = async () => {
     try {
       setError(null)
       const [expensesData, projectsData] = await Promise.all([
         getExpenses(),
-        getProjects(),
+        getProjects({
+          userId: user?.id,
+          organizationId: user?.organization_id,
+        }),
       ])
       setExpenses(expensesData)
       setProjects(projectsData)
@@ -140,7 +144,7 @@ export default function ExpensesPage() {
       category: expense.category,
       description: expense.description || '',
       merchant: expense.merchant || '',
-      expense_date: expense.expense_date,
+      expense_date: dateInputValue(expense.expense_date),
       project_id: expense.project_id || '',
       notes: expense.notes || '',
     })
@@ -305,7 +309,7 @@ export default function ExpensesPage() {
                 {expenses.map((expense) => (
                   <TableRow key={expense.id}>
                     <TableCell>
-                      {format(parseISO(expense.expense_date), 'MMM d, yyyy')}
+                      {formatDateOnly(expense.expense_date)}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">

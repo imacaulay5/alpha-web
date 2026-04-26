@@ -62,13 +62,16 @@ export default function ClientsPage() {
   })
 
   useEffect(() => {
-    loadClients()
-  }, [])
+    if (user) loadClients()
+  }, [user?.id, user?.organization_id])
 
   const loadClients = async () => {
     try {
       setError(null)
-      const data = await getClients()
+      const data = await getClients({
+        userId: user?.id,
+        organizationId: user?.organization_id,
+      })
       setClients(data)
     } catch (err) {
       console.error('Failed to load clients:', err)

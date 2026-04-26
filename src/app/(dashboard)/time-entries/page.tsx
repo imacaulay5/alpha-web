@@ -48,6 +48,7 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Clock, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
+import { formatDateOnly } from '@/lib/date-format'
 
 function formatDuration(minutes: number | null | undefined): string {
   if (!minutes) return '-'
@@ -91,15 +92,18 @@ export default function TimeEntriesPage() {
   })
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (user) loadData()
+  }, [user?.id, user?.organization_id])
 
   const loadData = async () => {
     try {
       setError(null)
       const [entriesData, projectsData] = await Promise.all([
         getTimeEntries(),
-        getProjects(),
+        getProjects({
+          userId: user?.id,
+          organizationId: user?.organization_id,
+        }),
       ])
       setEntries(entriesData)
       setProjects(projectsData)
@@ -144,11 +148,25 @@ export default function TimeEntriesPage() {
     setSaving(true)
 
     try {
-      const startAt = `${formData.date}T${formData.start_time}:00`
-      const endAt = `${formData.date}T${formData.end_time}:00`
+      const date = (document.getElementById('date') as HTMLInputElement | null)?.value || formData.date
+      const startTime = (document.getElementById('start_time') as HTMLInputElement | null)?.value || formData.start_time
+      const endTime = (document.getElementById('end_time') as HTMLInputElement | null)?.value || formData.end_time
+      const notes = (document.getElementById('notes') as HTMLTextAreaElement | null)?.value || formData.notes
+      const startAt = `${date}T${startTime}:00`
+      const endAt = `${date}T${endTime}:00`
       const startDate = new Date(startAt)
       const endDate = new Date(endAt)
       const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / 60000)
+
+      if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) {
+        toast.error('Enter times in HH:mm format')
+        return
+      }
+
+      if (durationMinutes <= 0) {
+        toast.error('End time must be after start time')
+        return
+      }
 
       const entryData = {
         user_id: user?.id!,
@@ -156,7 +174,7 @@ export default function TimeEntriesPage() {
         start_at: startAt,
         end_at: endAt,
         duration_minutes: durationMinutes,
-        notes: formData.notes || undefined,
+        notes: notes || undefined,
         status: TimeEntryStatus.draft,
       }
 
@@ -296,7 +314,7 @@ export default function TimeEntriesPage() {
                 {entries.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell>
-                      {format(parseISO(entry.start_at), 'MMM d, yyyy')}
+                      {formatDateOnly(entry.start_at)}
                     </TableCell>
                     <TableCell>
                       {entry.project?.name || '-'}
@@ -372,6 +390,7 @@ export default function TimeEntriesPage() {
                 <Label htmlFor="date">Date</Label>
                 <Input
                   id="date"
+                  name="date"
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
@@ -382,9 +401,13 @@ export default function TimeEntriesPage() {
                 <div className="space-y-2">
                   <Label htmlFor="start_time">Start Time</Label>
                   <Input
-                    id="start_time"
-                    type="time"
-                    value={formData.start_time}
+                  id="start_time"
+                  name="start_time"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{2}:[0-9]{2}"
+                  placeholder="09:00"
+                  value={formData.start_time}
                     onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
                     required
                   />
@@ -392,9 +415,13 @@ export default function TimeEntriesPage() {
                 <div className="space-y-2">
                   <Label htmlFor="end_time">End Time</Label>
                   <Input
-                    id="end_time"
-                    type="time"
-                    value={formData.end_time}
+                  id="end_time"
+                  name="end_time"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{2}:[0-9]{2}"
+                  placeholder="17:00"
+                  value={formData.end_time}
                     onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
                     required
                   />
@@ -404,6 +431,7 @@ export default function TimeEntriesPage() {
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
                   id="notes"
+                  name="notes"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="What did you work on?"

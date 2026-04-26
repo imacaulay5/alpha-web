@@ -67,15 +67,21 @@ export default function ProjectsPage() {
   })
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (user) loadData()
+  }, [user?.id, user?.organization_id])
 
   const loadData = async () => {
     try {
       setError(null)
       const [projectsData, clientsData] = await Promise.all([
-        getProjects(),
-        getClients(),
+        getProjects({
+          userId: user?.id,
+          organizationId: user?.organization_id,
+        }),
+        getClients({
+          userId: user?.id,
+          organizationId: user?.organization_id,
+        }),
       ])
       setProjects(projectsData)
       setClients(clientsData)

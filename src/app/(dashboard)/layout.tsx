@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTheme } from 'next-themes'
 import { FloatingActionButton } from '@/components/FloatingActionButton'
+import { accountTypeLabels } from '@/types/enums'
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,
@@ -141,7 +142,7 @@ export default function DashboardLayout({
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-semibold">Alpha</span>
               <span className="truncate text-xs text-muted-foreground">
-                {organization?.name || 'Personal'}
+                {organization?.name || (user?.account_type ? accountTypeLabels[user.account_type] : 'Personal')}
               </span>
             </div>
           </div>
