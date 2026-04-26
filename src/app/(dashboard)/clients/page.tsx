@@ -38,6 +38,15 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Plus, Users, Pencil, Trash2, Loader2, Mail, Phone } from 'lucide-react'
 import { toast } from 'sonner'
+import { AccountType } from '@/types/enums'
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message
+  }
+  return fallback
+}
 
 export default function ClientsPage() {
   const { user } = useAuth()
@@ -126,7 +135,7 @@ export default function ClientsPage() {
       } else {
         await createClient({
           ...formData,
-          user_id: user?.id,
+          user_id: user?.account_type === AccountType.business ? undefined : user?.id,
           organization_id: user?.organization_id,
           is_active: true,
         } as any)
@@ -135,7 +144,8 @@ export default function ClientsPage() {
       setDialogOpen(false)
       loadClients()
     } catch (error) {
-      toast.error('Failed to save client')
+      console.error('Failed to save client:', error)
+      toast.error(getErrorMessage(error, 'Failed to save client'))
     } finally {
       setSaving(false)
     }

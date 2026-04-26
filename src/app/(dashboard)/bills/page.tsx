@@ -108,6 +108,14 @@ function formatCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 }
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return error.message
+  }
+  return fallback
+}
+
 function getBillStatusVariant(status: BillStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
     case BillStatus.paid: return 'default'
@@ -400,7 +408,10 @@ function AccountsPayableView() {
       if (selectedVendor) { await updateVendor(selectedVendor.id, input); toast.success('Vendor updated') }
       else { await createVendor(input); toast.success('Vendor created') }
       setVendorDialog(false); loadData()
-    } catch { toast.error('Failed to save vendor') }
+    } catch (error) {
+      console.error('Failed to save vendor:', error)
+      toast.error(getErrorMessage(error, 'Failed to save vendor'))
+    }
     finally { setSavingVendor(false) }
   }
 
@@ -433,7 +444,10 @@ function AccountsPayableView() {
       const lines = billLines.filter(l => l.description).map((l, i) => ({ ...l, order: i }))
       await createVendorBill(input as any, lines)
       toast.success('Bill created'); setBillDialog(false); loadData()
-    } catch { toast.error('Failed to save bill') }
+    } catch (error) {
+      console.error('Failed to save vendor bill:', error)
+      toast.error(getErrorMessage(error, 'Failed to save bill'))
+    }
     finally { setSavingBill(false) }
   }
 
@@ -466,7 +480,10 @@ function AccountsPayableView() {
       const lines = poLines.filter(l => l.description).map((l, i) => ({ ...l, order: i }))
       await createPurchaseOrder(input as any, lines)
       toast.success('PO created'); setPODialog(false); loadData()
-    } catch { toast.error('Failed to save PO') }
+    } catch (error) {
+      console.error('Failed to save purchase order:', error)
+      toast.error(getErrorMessage(error, 'Failed to save PO'))
+    }
     finally { setSavingPO(false) }
   }
 

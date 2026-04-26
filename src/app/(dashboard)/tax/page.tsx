@@ -223,7 +223,7 @@ export default function TaxPage() {
       form_type: '1040-ES',
       tax_period_start: `${CURRENT_YEAR}-01-01`,
       tax_period_end: `${CURRENT_YEAR}-12-31`,
-      due_date: '',
+      due_date: format(new Date(), 'yyyy-MM-dd'),
       amount_due: '',
       amount_paid: '',
       notes: '',
@@ -914,6 +914,7 @@ export default function TaxPage() {
                   <Label htmlFor="due_date">Due Date *</Label>
                   <Input
                     id="due_date"
+                    name="due_date"
                     type="date"
                     value={formData.due_date}
                     onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
