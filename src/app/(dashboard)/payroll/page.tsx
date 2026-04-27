@@ -55,6 +55,8 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { useAppState } from '@/contexts/AppStateContext'
 import { Capability, PayFrequency, PayrollStatus, payFrequencyLabels, payrollStatusLabels } from '@/types/enums'
+import { DeferredModuleNotice } from '@/components/DeferredModuleNotice'
+import { showAdvancedModules } from '@/lib/product-scope'
 import type { Employee, PayrollRun, PayStub } from '@/types/models'
 import {
   getEmployees,
@@ -529,6 +531,14 @@ function PayStubsDialog({ open, run, onClose }: PayStubsDialogProps) {
 // ─── Main Page ───────────────────────────────────────────────
 
 export default function PayrollPage() {
+  if (!showAdvancedModules) {
+    return <DeferredModuleNotice moduleKey="payroll" />
+  }
+
+  return <PayrollWorkspace />
+}
+
+function PayrollWorkspace() {
   const { currentUser, organization, hasCapability } = useAppState()
   const canProcess = hasCapability(Capability.processPayroll)
   const canManageEmployees = hasCapability(Capability.manageEmployeeProfiles)

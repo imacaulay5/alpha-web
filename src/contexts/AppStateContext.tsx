@@ -4,12 +4,12 @@ import React, { createContext, useContext, useMemo } from 'react'
 import { useAuth } from './AuthContext'
 import { Capability, AccountType } from '@/types/enums'
 import { getUserCapabilities } from '@/lib/capabilities'
+import { showAdvancedModules } from '@/lib/product-scope'
 import type { User, Organization } from '@/types/models'
 
 // V1 focuses the product on easy accounting: money in, money out,
 // lightweight tax prep, and AI-guided next steps. Deeper ERP modules stay
 // implemented but are intentionally hidden from primary navigation for now.
-const SHOW_ADVANCED_MODULES = false
 
 // Tab definitions matching iOS app
 export type TabId = 'home' | 'time' | 'invoices' | 'bills' | 'expenses' | 'projects' | 'clients' | 'accounting' | 'tax' | 'payroll' | 'inventory' | 'team' | 'settings'
@@ -150,7 +150,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
 
     return visibleTabs.filter((tab) => {
       // Keep compliance-heavy and ERP-style modules out of the V1 surface.
-      if (!SHOW_ADVANCED_MODULES && ['accounting', 'payroll', 'inventory', 'team'].includes(tab.id)) {
+      if (!showAdvancedModules && ['accounting', 'payroll', 'inventory', 'team'].includes(tab.id)) {
         return false
       }
       // Personal users don't create invoices -- they use Bills instead
@@ -158,7 +158,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         return false
       }
       // Advanced modules are business-only when enabled.
-      if (SHOW_ADVANCED_MODULES && ['team', 'payroll', 'inventory', 'accounting'].includes(tab.id) && user.account_type !== AccountType.business) {
+      if (showAdvancedModules && ['team', 'payroll', 'inventory', 'accounting'].includes(tab.id) && user.account_type !== AccountType.business) {
         return false
       }
       // Personal accounts stay bill and expense focused.

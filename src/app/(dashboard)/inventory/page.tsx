@@ -54,6 +54,8 @@ import {
 } from '@/components/ui/table'
 import { useAppState } from '@/contexts/AppStateContext'
 import { Capability, StockStatus, stockStatusLabels } from '@/types/enums'
+import { DeferredModuleNotice } from '@/components/DeferredModuleNotice'
+import { showAdvancedModules } from '@/lib/product-scope'
 import type { InventoryItem } from '@/types/models'
 import type { Vendor } from '@/types/models'
 import {
@@ -311,6 +313,14 @@ function ItemDialog({ open, item, vendors, orgId, userId, onClose, onSave }: Ite
 // ─── Main Page ───────────────────────────────────────────────
 
 export default function InventoryPage() {
+  if (!showAdvancedModules) {
+    return <DeferredModuleNotice moduleKey="inventory" />
+  }
+
+  return <InventoryWorkspace />
+}
+
+function InventoryWorkspace() {
   const { currentUser, organization, hasCapability } = useAppState()
   const canManage = hasCapability(Capability.manageInventory)
   const canStockCount = hasCapability(Capability.performStockCounts)

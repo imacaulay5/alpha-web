@@ -63,6 +63,8 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { DeferredModuleNotice } from '@/components/DeferredModuleNotice'
+import { showAdvancedModules } from '@/lib/product-scope'
 import {
   Plus,
   BookOpen,
@@ -125,6 +127,14 @@ interface JournalLine {
 // ─── Main Page ────────────────────────────────────────────────
 
 export default function AccountingPage() {
+  if (!showAdvancedModules) {
+    return <DeferredModuleNotice moduleKey="accounting" />
+  }
+
+  return <AccountingWorkspace />
+}
+
+function AccountingWorkspace() {
   const { user } = useAuth()
   const { hasCapability } = useAppState()
 

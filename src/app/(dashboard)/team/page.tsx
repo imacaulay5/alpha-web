@@ -52,6 +52,8 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Plus, UserCog, Loader2, Mail, MoreHorizontal, Shield, UserMinus, Crown } from 'lucide-react'
 import { toast } from 'sonner'
+import { DeferredModuleNotice } from '@/components/DeferredModuleNotice'
+import { showAdvancedModules } from '@/lib/product-scope'
 
 function getRoleBadgeVariant(role: Role): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (role) {
@@ -84,6 +86,14 @@ function getInitials(name: string | null | undefined, email: string | null | und
 }
 
 export default function TeamPage() {
+  if (!showAdvancedModules) {
+    return <DeferredModuleNotice moduleKey="team" />
+  }
+
+  return <TeamWorkspace />
+}
+
+function TeamWorkspace() {
   const { user } = useAuth()
   const [members, setMembers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
