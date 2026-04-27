@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/services/expenses.service'
+import { getExpenses, createExpense, updateExpense, deleteExpense, uploadReceipt } from '@/services/expenses.service'
 import { getProjects } from '@/services/projects.service'
 import type { Expense, Project } from '@/types/models'
 import { ExpenseStatus, ExpenseCategory, expenseStatusLabels, expenseCategoryLabels } from '@/types/enums'
@@ -45,11 +45,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Receipt, Pencil, Trash2, Loader2, DollarSign, Wand2 } from 'lucide-react'
+import { Plus, Receipt, Pencil, Trash2, Loader2, DollarSign, Wand2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { formatDateOnly, dateInputValue } from '@/lib/date-format'
-import { captureExpenseFromText, getExpenseCategorySuggestionLabel, suggestExpenseCategory } from '@/lib/expense-ai'
+import { captureExpenseFromText, captureReceiptDocumentFromText, getExpenseCategorySuggestionLabel, suggestExpenseCategory } from '@/lib/expense-ai'
 
 function getStatusVariant(status: ExpenseStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
@@ -89,6 +89,9 @@ export default function ExpensesPage() {
   const [saving, setSaving] = useState(false)
   const [smartCaptureText, setSmartCaptureText] = useState('')
   const [smartCaptureSummary, setSmartCaptureSummary] = useState<string | null>(null)
+  const [receiptText, setReceiptText] = useState('')
+  const [receiptSummary, setReceiptSummary] = useState<string | null>(null)
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
 
   const [formData, setFormData] = useState({
     amount: '',
@@ -139,6 +142,9 @@ export default function ExpensesPage() {
     })
     setSmartCaptureText('')
     setSmartCaptureSummary(null)
+    setReceiptText('')
+    setReceiptSummary(null)
+    setReceiptFile(null)
     setDialogOpen(true)
   }
 
@@ -155,6 +161,9 @@ export default function ExpensesPage() {
     })
     setSmartCaptureText('')
     setSmartCaptureSummary(null)
+    setReceiptText('')
+    setReceiptSummary(null)
+    setReceiptFile(null)
     setDialogOpen(true)
   }
 
@@ -163,6 +172,7 @@ export default function ExpensesPage() {
     setSaving(true)
 
     try {
+      const receiptUrl = receiptFile ? await uploadReceipt(receiptFile) : selectedExpense?.receipt_url
       const expenseData = {
         user_id: user?.id!,
         amount: parseFloat(formData.amount),
@@ -173,6 +183,7 @@ export default function ExpensesPage() {
         expense_date: formData.expense_date,
         project_id: formData.project_id || undefined,
         notes: formData.notes || undefined,
+        receipt_url: receiptUrl || undefined,
         status: ExpenseStatus.draft,
       }
 
@@ -244,6 +255,19 @@ export default function ExpensesPage() {
         .filter(Boolean)
         .join(', ')}.`
     )
+  }
+  const handleReceiptExtraction = () => {
+    const result = captureReceiptDocumentFromText(receiptText)
+    setFormData({
+      ...formData,
+      amount: result.amount ?? formData.amount,
+      merchant: result.merchant ?? formData.merchant,
+      description: result.description ?? formData.description,
+      expense_date: result.expense_date ?? formData.expense_date,
+      category: result.category,
+      notes: result.notes ?? formData.notes,
+    })
+    setReceiptSummary(result.summary)
   }
 
   if (loading) {
@@ -455,6 +479,58 @@ export default function ExpensesPage() {
                   </div>
                 </div>
               )}
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <div className="mb-3 flex items-start gap-3">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Receipt className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Receipt/document extraction</p>
+                    <p className="text-sm text-muted-foreground">
+                      Attach a receipt and paste receipt text or OCR output for Alpha to extract the fields.
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="receipt_file">Receipt file</Label>
+                    <Input
+                      id="receipt_file"
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {receiptFile ? `${receiptFile.name} will be attached when you save.` : selectedExpense?.receipt_url ? 'Existing receipt will stay attached unless replaced.' : 'Optional image or PDF attachment.'}
+                    </p>
+                  </div>
+                  <Textarea
+                    value={receiptText}
+                    onChange={(e) => {
+                      setReceiptText(e.target.value)
+                      setReceiptSummary(null)
+                    }}
+                    placeholder={'Example:\nSTARBUCKS\n04/27/2026\nLatte 5.49\nTax 0.45\nTotal $5.94'}
+                    rows={4}
+                  />
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      {receiptSummary || 'Alpha looks for merchant, date, total, and category signals.'}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleReceiptExtraction}
+                      disabled={!receiptText.trim()}
+                      className="shrink-0 gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Extract receipt
+                    </Button>
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="amount">Amount *</Label>

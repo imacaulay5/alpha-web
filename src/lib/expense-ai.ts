@@ -16,6 +16,11 @@ export type ExpenseSmartCaptureResult = {
   reason: string
 }
 
+export type ReceiptDocumentCaptureResult = ExpenseSmartCaptureResult & {
+  notes?: string
+  summary: string
+}
+
 const categorySignals: Array<{
   category: ExpenseCategory
   reason: string
@@ -255,6 +260,15 @@ function parseAmountFromText(text: string): string | undefined {
   return amount.replace(/,/g, '')
 }
 
+function parseReceiptTotal(text: string): string | undefined {
+  const totalMatch =
+    text.match(/\b(?:grand\s+total|amount\s+paid|total)\s*[:#-]?\s*(?:\$|usd\s*)?\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)\b/i) ??
+    text.match(/\b(?:\$|usd\s*)\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:total|paid)\b/i)
+
+  if (totalMatch?.[1]) return totalMatch[1].replace(/,/g, '')
+  return parseAmountFromText(text)
+}
+
 function cleanCaptureText(text: string) {
   return text
     .replace(/(?:\$|usd\s*)\s*\d+(?:,\d{3})*(?:\.\d{1,2})?/gi, ' ')
@@ -283,6 +297,18 @@ function inferMerchant(text: string) {
   return titleCase(words.join(' '))
 }
 
+function inferReceiptMerchant(text: string) {
+  const lines = text
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .filter(line => !/\b(total|subtotal|tax|visa|mastercard|amex|change|cash|receipt|invoice)\b/i.test(line))
+    .filter(line => !parseAmountFromText(line))
+
+  if (lines[0]) return titleCase(lines[0].slice(0, 50))
+  return inferMerchant(text)
+}
+
 export function captureExpenseFromText(text: string): ExpenseSmartCaptureResult {
   const suggestion = suggestExpenseCategory({ merchant: text, description: text, notes: text })
   const amount = parseAmountFromText(text)
@@ -300,5 +326,33 @@ export function captureExpenseFromText(text: string): ExpenseSmartCaptureResult 
     reason: amount
       ? `${suggestion.reason} Alpha also found an amount in your note.`
       : suggestion.reason,
+  }
+}
+
+export function captureReceiptDocumentFromText(text: string): ReceiptDocumentCaptureResult {
+  const base = captureExpenseFromText(text)
+  const amount = parseReceiptTotal(text)
+  const merchant = inferReceiptMerchant(text) ?? base.merchant
+  const expenseDate = parseDateFromText(text) ?? base.expense_date
+  const suggestion = suggestExpenseCategory({ merchant, description: text, notes: text })
+  const description = merchant ? `Receipt from ${merchant}` : base.description
+  const found = [
+    amount ? 'total' : null,
+    merchant ? 'merchant' : null,
+    expenseDate ? 'date' : null,
+    'category',
+  ].filter(Boolean)
+
+  return {
+    ...base,
+    amount,
+    merchant,
+    description,
+    expense_date: expenseDate,
+    category: suggestion.category,
+    confidence: suggestion.confidence,
+    reason: suggestion.reason,
+    notes: text.trim().slice(0, 1000),
+    summary: `Extracted ${found.join(', ')} from the receipt text.`,
   }
 }
