@@ -143,6 +143,15 @@ const FORM_TYPES = [
   '941', '940', 'W-3', 'Sales Tax Return', 'State Return', 'Other',
 ]
 
+type TaxReadinessItem = {
+  id: string
+  label: string
+  detail: string
+  done: boolean
+  badge: string
+  tone: 'ready' | 'watch' | 'action'
+}
+
 // ─── Quarter Cards ────────────────────────────────────────────
 
 interface QuarterInfo {
@@ -344,6 +353,52 @@ export default function TaxPage() {
   const federalTax = estimateFederalTax(adjustedIncome)
   const totalTax = federalTax + seTax
   const quarterlyPayment = totalTax / 4
+  const hasEstimatorInputs = grossIncome.trim() !== '' && expenses.trim() !== ''
+
+  const taxReadinessItems: TaxReadinessItem[] = [
+    {
+      id: 'deadlines',
+      label: 'Deadlines are under control',
+      detail: overdueFiled.length > 0
+        ? `${overdueFiled.length} filing${overdueFiled.length === 1 ? '' : 's'} need attention before export.`
+        : dueThisMonth.length > 0
+          ? `${dueThisMonth.length} deadline${dueThisMonth.length === 1 ? '' : 's'} coming up in the next 30 days.`
+          : 'No overdue or near-term filings are currently tracked.',
+      done: overdueFiled.length === 0 && dueThisMonth.length === 0,
+      badge: overdueFiled.length > 0 ? 'Action' : dueThisMonth.length > 0 ? 'Soon' : 'Ready',
+      tone: overdueFiled.length > 0 ? 'action' : dueThisMonth.length > 0 ? 'watch' : 'ready',
+    },
+    ...(accountType !== AccountType.personal ? [{
+      id: 'quarterly',
+      label: `${CURRENT_YEAR} quarterly estimates are set up`,
+      detail: hasQuarterlyFilings
+        ? `${quarterFilings.length} estimated tax filing${quarterFilings.length === 1 ? '' : 's'} tracked for this year.`
+        : 'Add quarterly estimates so self-employed tax payments do not live in your head.',
+      done: hasQuarterlyFilings,
+      badge: hasQuarterlyFilings ? 'Ready' : 'Add quarters',
+      tone: hasQuarterlyFilings ? 'ready' : 'action',
+    } satisfies TaxReadinessItem] : []),
+    ...(canEstimate ? [{
+      id: 'estimator',
+      label: 'Estimator has income and expense inputs',
+      detail: hasEstimatorInputs
+        ? `Estimated quarterly payment is ${formatCurrency(Math.max(0, quarterlyPayment))}.`
+        : 'Enter annual income and deductible expenses to get a rough tax planning number.',
+      done: hasEstimatorInputs,
+      badge: hasEstimatorInputs ? 'Estimated' : 'Needs inputs',
+      tone: hasEstimatorInputs ? 'ready' : 'watch',
+    } satisfies TaxReadinessItem] : []),
+    ...(canExport ? [{
+      id: 'export',
+      label: 'Tax packet is ready to review',
+      detail: filings.length > 0
+        ? 'Tracked filings can be reviewed before exporting tax records.'
+        : 'Add at least one filing or deadline before preparing an export packet.',
+      done: filings.length > 0 && overdueFiled.length === 0,
+      badge: filings.length > 0 ? 'Review' : 'Start',
+      tone: filings.length > 0 && overdueFiled.length === 0 ? 'ready' : 'watch',
+    } satisfies TaxReadinessItem] : []),
+  ]
 
   if (loading) {
     return (
@@ -430,6 +485,53 @@ export default function TaxPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wand2 className="w-4 h-4" />
+                Alpha Tax Readiness
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                A plain-English check before you estimate, pay, or export. Estimates are planning aids, not tax advice.
+              </p>
+            </div>
+            <Badge variant="outline" className="shrink-0">
+              {taxReadinessItems.filter(item => item.done).length}/{taxReadinessItems.length} ready
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {taxReadinessItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex gap-3 rounded-lg border bg-muted/30 p-4"
+              >
+                {item.done ? (
+                  <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                ) : (
+                  <AlertCircle className={`mt-0.5 h-5 w-5 shrink-0 ${item.tone === 'action' ? 'text-destructive' : 'text-orange-500'}`} />
+                )}
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium">{item.label}</p>
+                    <Badge
+                      variant={item.tone === 'action' ? 'destructive' : item.done ? 'default' : 'secondary'}
+                      className="text-xs"
+                    >
+                      {item.badge}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{item.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Main Tabs */}
       <Tabs defaultValue={accountType === AccountType.personal ? 'filings' : 'quarterly'}>
