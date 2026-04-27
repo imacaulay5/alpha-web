@@ -14,22 +14,22 @@ const accountTypeOptions = [
     type: AccountType.personal,
     icon: User,
     title: accountTypeLabels[AccountType.personal],
-    description: 'Track personal expenses, bills, and simple invoicing for yourself.',
-    features: ['Expense tracking', 'Simple invoicing', 'Basic reports'],
+    description: 'Track household bills, personal spending, and tax-ready records without accounting jargon.',
+    features: ['Bill tracking', 'Expense categories', 'Tax-ready exports'],
   },
   {
     type: AccountType.freelancer,
     icon: Briefcase,
     title: accountTypeLabels[AccountType.freelancer],
-    description: 'Full-featured time tracking, project management, and invoicing for independent work.',
-    features: ['Time tracking', 'Project & client management', 'Professional invoicing', 'Reports & analytics'],
+    description: 'Manage client work from time tracking through invoices, expenses, and simple tax prep.',
+    features: ['Time tracking', 'Clients & projects', 'Professional invoicing', 'AI-guided next steps'],
   },
   {
     type: AccountType.business,
     icon: Building2,
     title: accountTypeLabels[AccountType.business],
-    description: 'Complete business management with team collaboration and role-based access.',
-    features: ['Everything in Freelancer', 'Team management', 'Role-based access', 'Approvals & workflows'],
+    description: 'Run day-to-day money operations for a small service business with a clean accounting workspace.',
+    features: ['Invoices & bills', 'Expenses', 'Clients & projects', 'Cashflow overview'],
   },
 ]
 

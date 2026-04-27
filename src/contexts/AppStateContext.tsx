@@ -6,6 +6,11 @@ import { Capability, AccountType } from '@/types/enums'
 import { getUserCapabilities } from '@/lib/capabilities'
 import type { User, Organization } from '@/types/models'
 
+// V1 focuses the product on easy accounting: money in, money out,
+// lightweight tax prep, and AI-guided next steps. Deeper ERP modules stay
+// implemented but are intentionally hidden from primary navigation for now.
+const SHOW_ADVANCED_MODULES = false
+
 // Tab definitions matching iOS app
 export type TabId = 'home' | 'time' | 'invoices' | 'bills' | 'expenses' | 'projects' | 'clients' | 'accounting' | 'tax' | 'payroll' | 'inventory' | 'team' | 'settings'
 
@@ -70,7 +75,7 @@ const allTabs: Tab[] = [
   },
   {
     id: 'tax',
-    label: 'Tax',
+    label: 'Tax Prep',
     icon: 'Calculator',
     path: '/tax',
     requiredCapabilities: [Capability.viewTaxDashboard],
@@ -144,20 +149,20 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     if (!user) return []
 
     return visibleTabs.filter((tab) => {
-      // Team, payroll, inventory tabs only visible for business accounts
-      if (['team', 'payroll', 'inventory'].includes(tab.id) && user.account_type !== AccountType.business) {
+      // Keep compliance-heavy and ERP-style modules out of the V1 surface.
+      if (!SHOW_ADVANCED_MODULES && ['accounting', 'payroll', 'inventory', 'team'].includes(tab.id)) {
         return false
       }
       // Personal users don't create invoices -- they use Bills instead
       if (tab.id === 'invoices' && user.account_type === AccountType.personal) {
         return false
       }
-      // Hide business accounting for freelancer/contractor and personal accounts.
-      if (tab.id === 'accounting' && user.account_type !== AccountType.business) {
+      // Advanced modules are business-only when enabled.
+      if (SHOW_ADVANCED_MODULES && ['team', 'payroll', 'inventory', 'accounting'].includes(tab.id) && user.account_type !== AccountType.business) {
         return false
       }
-      // Hide freelancer-focused tabs for business accounts
-      if (['time', 'projects', 'clients'].includes(tab.id) && user.account_type === AccountType.business) {
+      // Personal accounts stay bill and expense focused.
+      if (['time', 'projects', 'clients'].includes(tab.id) && user.account_type === AccountType.personal) {
         return false
       }
       return true

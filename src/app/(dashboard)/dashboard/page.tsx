@@ -13,7 +13,6 @@ import {
   TrendingUp,
   TrendingDown,
   DollarSign,
-  Users,
   Clock,
   FileText,
   Receipt,
@@ -22,6 +21,7 @@ import {
   AlertCircle,
   CreditCard,
   CalendarClock,
+  Wand2,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { getQuickActions } from '@/lib/quick-actions'
@@ -40,6 +40,14 @@ type RecentActivity = {
   message: string
   time: string
   status: 'success' | 'warning'
+}
+
+type AiNextStep = {
+  id: string
+  title: string
+  detail: string
+  href: string
+  priority: 'high' | 'medium' | 'low'
 }
 
 function formatCurrency(value: number) {
@@ -124,6 +132,136 @@ function getRecentPersonalActivity(bills: Bill[], expenses: Expense[]): RecentAc
     .map(({ date: _date, ...activity }) => activity)
 }
 
+function getPersonalNextSteps(bills: Bill[], expenses: Expense[]): AiNextStep[] {
+  const now = new Date()
+  const unpaidBills = bills.filter(
+    bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
+  )
+  const overdueBills = unpaidBills.filter(bill => differenceInDays(parseISO(bill.due_date), now) < 0)
+  const billsDueThisWeek = unpaidBills.filter((bill) => {
+    const dueDate = parseISO(bill.due_date)
+    return !isBefore(dueDate, now) && !isAfter(dueDate, addDays(now, 7))
+  })
+  const uncategorizedExpenses = expenses.filter((expense) => !expense.category)
+  const submittedExpenses = expenses.filter((expense) => expense.status === ExpenseStatus.submitted)
+  const nextSteps: AiNextStep[] = []
+
+  if (overdueBills.length > 0) {
+    nextSteps.push({
+      id: 'overdue-bills',
+      title: `${overdueBills.length} overdue ${overdueBills.length === 1 ? 'bill' : 'bills'}`,
+      detail: `Review ${formatCurrency(overdueBills.reduce((sum, bill) => sum + bill.amount, 0))} in overdue payments.`,
+      href: '/bills',
+      priority: 'high',
+    })
+  }
+
+  if (billsDueThisWeek.length > 0) {
+    nextSteps.push({
+      id: 'bills-due-this-week',
+      title: `${billsDueThisWeek.length} ${billsDueThisWeek.length === 1 ? 'bill is' : 'bills are'} due this week`,
+      detail: 'Pay or mark them paid to keep the dashboard current.',
+      href: '/bills',
+      priority: 'medium',
+    })
+  }
+
+  if (uncategorizedExpenses.length > 0) {
+    nextSteps.push({
+      id: 'categorize-expenses',
+      title: `${uncategorizedExpenses.length} expenses need categories`,
+      detail: 'Categorized expenses make reports and tax exports cleaner.',
+      href: '/expenses',
+      priority: 'medium',
+    })
+  }
+
+  if (submittedExpenses.length > 0) {
+    nextSteps.push({
+      id: 'submitted-expenses',
+      title: `${submittedExpenses.length} expenses are waiting`,
+      detail: 'Review pending expenses before month end.',
+      href: '/expenses',
+      priority: 'low',
+    })
+  }
+
+  if (nextSteps.length === 0) {
+    nextSteps.push({
+      id: 'clean-month',
+      title: 'Your records look current',
+      detail: 'Add new bills or expenses as they come in and Alpha will surface what needs attention.',
+      href: '/expenses',
+      priority: 'low',
+    })
+  }
+
+  return nextSteps.slice(0, 3)
+}
+
+function getSampleNextSteps(accountType: AccountType): AiNextStep[] {
+  if (accountType === AccountType.freelancer) {
+    return [
+      {
+        id: 'draft-invoices',
+        title: 'Turn tracked work into invoices',
+        detail: 'Review recent billable hours and draft invoices for active clients.',
+        href: '/invoices',
+        priority: 'high',
+      },
+      {
+        id: 'expense-review',
+        title: 'Check this month\'s expenses',
+        detail: 'Categorize spending before tax prep gets noisy.',
+        href: '/expenses',
+        priority: 'medium',
+      },
+      {
+        id: 'tax-prep',
+        title: 'Estimate your quarterly tax set-aside',
+        detail: 'Use income and expense totals to keep cash reserved.',
+        href: '/tax',
+        priority: 'low',
+      },
+    ]
+  }
+
+  return [
+    {
+      id: 'cashflow-review',
+      title: 'Review open invoices and bills',
+      detail: 'Keep receivables and upcoming payments visible in one routine.',
+      href: '/dashboard',
+      priority: 'high',
+    },
+    {
+      id: 'client-follow-up',
+      title: 'Follow up on unpaid invoices',
+      detail: 'A quick payment reminder can protect this month\'s cashflow.',
+      href: '/invoices',
+      priority: 'medium',
+    },
+    {
+      id: 'tax-ready',
+      title: 'Prepare tax-ready records',
+      detail: 'Make sure income and expenses are categorized before export.',
+      href: '/tax',
+      priority: 'low',
+    },
+  ]
+}
+
+function getPriorityVariant(priority: AiNextStep['priority']): 'default' | 'secondary' | 'outline' | 'destructive' {
+  switch (priority) {
+    case 'high':
+      return 'destructive'
+    case 'medium':
+      return 'secondary'
+    default:
+      return 'outline'
+  }
+}
+
 // Freelancer account dashboard stats
 const freelancerStats: DashboardStat[] = [
   { title: 'Billable Hours', value: '142h', change: '+12.5%', trend: 'up', icon: Clock },
@@ -200,6 +338,10 @@ export default function DashboardPage() {
           { id: 'expense-1', message: 'Expense report pending approval', time: '3 hours ago', status: 'warning' as const },
           { id: 'project-1', message: 'New project created: Website Redesign', time: '1 day ago', status: 'success' as const },
         ]
+  const aiNextSteps =
+    accountType === AccountType.personal
+      ? getPersonalNextSteps(personalBills, personalExpenses)
+      : getSampleNextSteps(accountType)
 
   const unpaidBills = personalBills.filter(
     bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
@@ -226,11 +368,40 @@ export default function DashboardPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-2xl font-bold">Money Overview</h1>
         <p className="text-muted-foreground">
-          Welcome back, {user?.name?.split(' ')[0] || 'there'}!
+          Welcome back, {user?.name?.split(' ')[0] || 'there'} — here are the financial items that need attention.
         </p>
       </div>
+
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Wand2 className="h-5 w-5 text-primary" />
+            Alpha Next Steps
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {aiNextSteps.map((step) => (
+              <button
+                key={step.id}
+                onClick={() => router.push(step.href)}
+                className="rounded-lg border bg-background p-4 text-left transition-colors hover:bg-accent"
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <Badge variant={getPriorityVariant(step.priority)}>
+                    {step.priority}
+                  </Badge>
+                  <Wand2 className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <h2 className="text-sm font-semibold">{step.title}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{step.detail}</p>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Quick Actions */}
       <Card>

@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Alpha',
-  description: 'Time tracking, invoicing, and business management',
+  description: 'AI-assisted accounting for bills, expenses, invoices, and financial next steps',
 }
 
 export default function RootLayout({

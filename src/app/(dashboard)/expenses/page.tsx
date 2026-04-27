@@ -45,10 +45,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Receipt, Pencil, Trash2, Loader2, DollarSign } from 'lucide-react'
+import { Plus, Receipt, Pencil, Trash2, Loader2, DollarSign, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { formatDateOnly, dateInputValue } from '@/lib/date-format'
+import { getExpenseCategorySuggestionLabel, suggestExpenseCategory } from '@/lib/expense-ai'
 
 function getStatusVariant(status: ExpenseStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
@@ -203,6 +204,18 @@ export default function ExpensesPage() {
 
   // Calculate total
   const totalAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+  const categorySuggestion = suggestExpenseCategory({
+    merchant: formData.merchant,
+    description: formData.description,
+    notes: formData.notes,
+  })
+  const shouldShowCategorySuggestion =
+    dialogOpen &&
+    (formData.merchant.trim() || formData.description.trim() || formData.notes.trim()) &&
+    categorySuggestion.category !== formData.category
+  const applyCategorySuggestion = () => {
+    setFormData({ ...formData, category: categorySuggestion.category })
+  }
 
   if (loading) {
     return (
@@ -450,6 +463,38 @@ export default function ExpensesPage() {
                   placeholder="Brief description of the expense"
                 />
               </div>
+              {shouldShowCategorySuggestion && (
+                <div className="rounded-lg border bg-primary/5 p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex gap-3">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <Wand2 className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium">
+                            Alpha suggests {getExpenseCategorySuggestionLabel(categorySuggestion)}
+                          </p>
+                          <Badge variant="outline">{categorySuggestion.confidence} confidence</Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {categorySuggestion.reason}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={applyCategorySuggestion}
+                      className="shrink-0 gap-2"
+                    >
+                      <Wand2 className="h-4 w-4" />
+                      Apply
+                    </Button>
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
