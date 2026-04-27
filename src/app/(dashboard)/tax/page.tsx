@@ -165,6 +165,16 @@ type TaxPrepReminder = {
   tone: 'action' | 'watch' | 'ready'
 }
 
+type TaxPacketRow = {
+  record_type: string
+  date: string
+  name: string
+  category: string
+  status: string
+  amount: number | string
+  notes: string
+}
+
 // ─── Quarter Cards ────────────────────────────────────────────
 
 interface QuarterInfo {
@@ -181,6 +191,30 @@ function getQuarters(year: number): QuarterInfo[] {
     { label: 'Q3', period: `Jun 1 – Aug 31, ${year}`, dueDate: `${year}-09-15` },
     { label: 'Q4', period: `Sep 1 – Dec 31, ${year}`, dueDate: `${year + 1}-01-15` },
   ]
+}
+
+function escapeCsvValue(value: unknown) {
+  const text = value === null || value === undefined ? '' : String(value)
+  return text.includes(',') || text.includes('"') || text.includes('\n')
+    ? `"${text.replace(/"/g, '""')}"`
+    : text
+}
+
+function downloadTaxPacketCsv(rows: TaxPacketRow[], filename: string) {
+  const headers: (keyof TaxPacketRow)[] = ['record_type', 'date', 'name', 'category', 'status', 'amount', 'notes']
+  const csv = [
+    headers.join(','),
+    ...rows.map(row => headers.map(header => escapeCsvValue(row[header])).join(',')),
+  ].join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 
 // ─── Main Page ────────────────────────────────────────────────
@@ -207,6 +241,7 @@ export default function TaxPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedFiling, setSelectedFiling] = useState<TaxFiling | null>(null)
   const [saving, setSaving] = useState(false)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -351,6 +386,16 @@ export default function TaxPage() {
     }
   }
 
+  const handleDownloadTaxPacket = () => {
+    if (taxPacketRows.length === 0) {
+      toast.error('No tax records to export')
+      return
+    }
+
+    downloadTaxPacketCsv(taxPacketRows, `alpha-tax-packet-${CURRENT_YEAR}.csv`)
+    toast.success('Tax packet downloaded')
+  }
+
   // ─── Computed ────────────────────────────────────────────────
 
   const quarters = getQuarters(CURRENT_YEAR)
@@ -391,6 +436,43 @@ export default function TaxPage() {
     invoice.status === InvoiceStatus.paid ||
     invoice.status === InvoiceStatus.overdue
   ))
+  const taxExpenseTotal = taxExpenses.reduce((sum, expense) => sum + expense.amount, 0)
+  const taxIncomeTotal = taxIncomeInvoices.reduce((sum, invoice) => sum + invoice.total, 0)
+  const exportWarnings = [
+    ...(overdueFiled.length > 0 ? [`${overdueFiled.length} filing${overdueFiled.length === 1 ? '' : 's'} are overdue.`] : []),
+    ...(uncategorizedTaxExpenses.length > 0 ? [`${uncategorizedTaxExpenses.length} expense${uncategorizedTaxExpenses.length === 1 ? '' : 's'} are missing categories.`] : []),
+    ...(taxExpenses.length === 0 ? ['No expenses are included for this tax year.'] : []),
+    ...(accountType !== AccountType.personal && taxIncomeInvoices.length === 0 ? ['No sent, paid, or overdue invoices are included as income.'] : []),
+  ]
+  const taxPacketRows: TaxPacketRow[] = [
+    ...taxExpenses.map((expense) => ({
+      record_type: 'expense',
+      date: expense.expense_date,
+      name: expense.merchant || expense.description || 'Expense',
+      category: expense.category || 'Uncategorized',
+      status: expense.status,
+      amount: expense.amount,
+      notes: expense.notes || '',
+    })),
+    ...taxIncomeInvoices.map((invoice) => ({
+      record_type: 'invoice',
+      date: invoice.issue_date,
+      name: invoice.invoice_number,
+      category: invoice.client?.name || 'Client income',
+      status: invoice.status,
+      amount: invoice.total,
+      notes: invoice.notes || '',
+    })),
+    ...filings.map((filing) => ({
+      record_type: 'filing',
+      date: filing.due_date,
+      name: filing.name,
+      category: filing.form_type,
+      status: filing.status,
+      amount: filing.amount_due ?? '',
+      notes: filing.notes || '',
+    })),
+  ]
 
   const taxReadinessItems: TaxReadinessItem[] = [
     {
@@ -655,6 +737,57 @@ export default function TaxPage() {
           </div>
         </CardContent>
       </Card>
+
+      {canExport && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Tax Export Packet
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Review the records Alpha will include before downloading a CSV for your tax workspace.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setExportDialogOpen(true)}
+                className="shrink-0 gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Review export
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">Expenses</p>
+                <p className="text-xl font-semibold">{taxExpenses.length}</p>
+                <p className="text-xs text-muted-foreground">{formatCurrency(taxExpenseTotal)}</p>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">Income records</p>
+                <p className="text-xl font-semibold">{taxIncomeInvoices.length}</p>
+                <p className="text-xs text-muted-foreground">{formatCurrency(taxIncomeTotal)}</p>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">Filings</p>
+                <p className="text-xl font-semibold">{filings.length}</p>
+                <p className="text-xs text-muted-foreground">{overdueFiled.length} overdue</p>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-xs text-muted-foreground">Readiness</p>
+                <p className="text-xl font-semibold">{exportWarnings.length === 0 ? 'Ready' : `${exportWarnings.length} flags`}</p>
+                <p className="text-xs text-muted-foreground">review before filing</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main Tabs */}
       <Tabs defaultValue={accountType === AccountType.personal ? 'filings' : 'quarterly'}>
@@ -1224,6 +1357,71 @@ export default function TaxPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Export Review ── */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Review Tax Export Packet</DialogTitle>
+            <DialogDescription>
+              Download a CSV summary of tax-year records. Review with a tax professional before filing.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Expense total</p>
+                <p className="text-lg font-semibold">{formatCurrency(taxExpenseTotal)}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">Income total</p>
+                <p className="text-lg font-semibold">{formatCurrency(taxIncomeTotal)}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">CSV rows</p>
+                <p className="text-lg font-semibold">{taxPacketRows.length}</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-muted/30 p-4">
+              <p className="text-sm font-medium">Included records</p>
+              <div className="mt-3 grid grid-cols-1 gap-2 text-sm text-muted-foreground sm:grid-cols-3">
+                <p>{taxExpenses.length} expenses</p>
+                <p>{taxIncomeInvoices.length} income invoices</p>
+                <p>{filings.length} filing deadlines</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Review flags</p>
+              {exportWarnings.length > 0 ? (
+                <div className="space-y-2">
+                  {exportWarnings.map((warning) => (
+                    <div key={warning} className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900 dark:border-orange-900 dark:bg-orange-950 dark:text-orange-100">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{warning}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+                  <span>No export blockers detected by Alpha.</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setExportDialogOpen(false)}>
+              Close
+            </Button>
+            <Button type="button" onClick={handleDownloadTaxPacket} className="gap-2">
+              <Download className="h-4 w-4" />
+              Download CSV
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
