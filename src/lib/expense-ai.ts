@@ -6,6 +6,16 @@ export type ExpenseCategorySuggestion = {
   reason: string
 }
 
+export type ExpenseSmartCaptureResult = {
+  amount?: string
+  merchant?: string
+  description?: string
+  expense_date?: string
+  category: ExpenseCategory
+  confidence: ExpenseCategorySuggestion['confidence']
+  reason: string
+}
+
 const categorySignals: Array<{
   category: ExpenseCategory
   reason: string
@@ -196,4 +206,99 @@ export function suggestExpenseCategory(input: {
 
 export function getExpenseCategorySuggestionLabel(suggestion: ExpenseCategorySuggestion) {
   return expenseCategoryLabels[suggestion.category]
+}
+
+function formatDateInput(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function parseDateFromText(text: string): string | undefined {
+  const normalized = text.toLowerCase()
+  const today = new Date()
+
+  if (normalized.includes('yesterday')) {
+    const yesterday = new Date(today)
+    yesterday.setDate(today.getDate() - 1)
+    return formatDateInput(yesterday)
+  }
+
+  if (normalized.includes('today')) {
+    return formatDateInput(today)
+  }
+
+  const isoDate = text.match(/\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/)
+  if (isoDate) {
+    const [, year, month, day] = isoDate
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  const usDate = text.match(/\b(0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])[-/](20\d{2})\b/)
+  if (usDate) {
+    const [, month, day, year] = usDate
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+  }
+
+  return undefined
+}
+
+function parseAmountFromText(text: string): string | undefined {
+  const currencyAmount = text.match(/(?:\$|usd\s*)\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)/i)
+  const plainAmount = text.match(/\b(\d+(?:,\d{3})*\.\d{2})\b/)
+  const amount = currencyAmount?.[1] ?? plainAmount?.[1]
+
+  if (!amount) return undefined
+
+  return amount.replace(/,/g, '')
+}
+
+function cleanCaptureText(text: string) {
+  return text
+    .replace(/(?:\$|usd\s*)\s*\d+(?:,\d{3})*(?:\.\d{1,2})?/gi, ' ')
+    .replace(/\b\d+(?:,\d{3})*\.\d{2}\b/g, ' ')
+    .replace(/\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b/g, ' ')
+    .replace(/\b(0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])[-/](20\d{2})\b/g, ' ')
+    .replace(/\b(today|yesterday)\b/gi, ' ')
+    .replace(/\b(at|from|for|on|paid|expense|receipt|purchase)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function titleCase(value: string) {
+  return value
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+function inferMerchant(text: string) {
+  const cleaned = cleanCaptureText(text)
+  if (!cleaned) return undefined
+
+  const words = cleaned.split(' ').slice(0, 4)
+  return titleCase(words.join(' '))
+}
+
+export function captureExpenseFromText(text: string): ExpenseSmartCaptureResult {
+  const suggestion = suggestExpenseCategory({ merchant: text, description: text, notes: text })
+  const amount = parseAmountFromText(text)
+  const expenseDate = parseDateFromText(text)
+  const merchant = inferMerchant(text)
+  const description = cleanCaptureText(text)
+
+  return {
+    amount,
+    merchant,
+    description: description || undefined,
+    expense_date: expenseDate,
+    category: suggestion.category,
+    confidence: suggestion.confidence,
+    reason: amount
+      ? `${suggestion.reason} Alpha also found an amount in your note.`
+      : suggestion.reason,
+  }
 }

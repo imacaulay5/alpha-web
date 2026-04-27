@@ -49,7 +49,7 @@ import { Plus, Receipt, Pencil, Trash2, Loader2, DollarSign, Wand2 } from 'lucid
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { formatDateOnly, dateInputValue } from '@/lib/date-format'
-import { getExpenseCategorySuggestionLabel, suggestExpenseCategory } from '@/lib/expense-ai'
+import { captureExpenseFromText, getExpenseCategorySuggestionLabel, suggestExpenseCategory } from '@/lib/expense-ai'
 
 function getStatusVariant(status: ExpenseStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
@@ -87,6 +87,8 @@ export default function ExpensesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [saving, setSaving] = useState(false)
+  const [smartCaptureText, setSmartCaptureText] = useState('')
+  const [smartCaptureSummary, setSmartCaptureSummary] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     amount: '',
@@ -135,6 +137,8 @@ export default function ExpensesPage() {
       project_id: '',
       notes: '',
     })
+    setSmartCaptureText('')
+    setSmartCaptureSummary(null)
     setDialogOpen(true)
   }
 
@@ -149,6 +153,8 @@ export default function ExpensesPage() {
       project_id: expense.project_id || '',
       notes: expense.notes || '',
     })
+    setSmartCaptureText('')
+    setSmartCaptureSummary(null)
     setDialogOpen(true)
   }
 
@@ -215,6 +221,29 @@ export default function ExpensesPage() {
     categorySuggestion.category !== formData.category
   const applyCategorySuggestion = () => {
     setFormData({ ...formData, category: categorySuggestion.category })
+  }
+  const handleSmartCapture = () => {
+    const result = captureExpenseFromText(smartCaptureText)
+    const nextFormData = {
+      ...formData,
+      amount: result.amount ?? formData.amount,
+      merchant: result.merchant ?? formData.merchant,
+      description: result.description ?? formData.description,
+      expense_date: result.expense_date ?? formData.expense_date,
+      category: result.category,
+    }
+
+    setFormData(nextFormData)
+    setSmartCaptureSummary(
+      `Filled ${[
+        result.amount ? 'amount' : null,
+        result.merchant ? 'merchant' : null,
+        result.expense_date ? 'date' : null,
+        'category',
+      ]
+        .filter(Boolean)
+        .join(', ')}.`
+    )
   }
 
   if (loading) {
@@ -384,6 +413,48 @@ export default function ExpensesPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
+              {!selectedExpense && (
+                <div className="rounded-lg border bg-primary/5 p-3">
+                  <div className="mb-3 flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <Wand2 className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Smart capture</p>
+                      <p className="text-sm text-muted-foreground">
+                        Paste a receipt line or describe the expense and Alpha will prefill what it can.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <Textarea
+                      value={smartCaptureText}
+                      onChange={(e) => {
+                        setSmartCaptureText(e.target.value)
+                        setSmartCaptureSummary(null)
+                      }}
+                      placeholder="Example: Starbucks $12.48 coffee with client yesterday"
+                      rows={2}
+                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {smartCaptureSummary || 'Alpha looks for amount, merchant, date, and category signals.'}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSmartCapture}
+                        disabled={!smartCaptureText.trim()}
+                        className="shrink-0 gap-2"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                        Extract details
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="amount">Amount *</Label>
