@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { getTimeEntries, createTimeEntry, updateTimeEntry, deleteTimeEntry } from '@/services/time-entries.service'
 import { getProjects } from '@/services/projects.service'
@@ -45,10 +45,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Clock, Pencil, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Clock, Pencil, Trash2, Loader2, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { formatDateOnly } from '@/lib/date-format'
+import { captureTimeEntryFromText } from '@/lib/time-ai'
 
 function formatDuration(minutes: number | null | undefined): string {
   if (!minutes) return '-'
@@ -82,6 +83,9 @@ export default function TimeEntriesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<TimeEntry | null>(null)
   const [saving, setSaving] = useState(false)
+  const [smartTimeText, setSmartTimeText] = useState('')
+  const [smartTimeSummary, setSmartTimeSummary] = useState<string | null>(null)
+  const smartTimeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   const [formData, setFormData] = useState({
     project_id: '',
@@ -126,6 +130,8 @@ export default function TimeEntriesPage() {
       end_time: '17:00',
       notes: '',
     })
+    setSmartTimeText('')
+    setSmartTimeSummary(null)
     setDialogOpen(true)
   }
 
@@ -140,7 +146,21 @@ export default function TimeEntriesPage() {
       end_time: format(endDate, 'HH:mm'),
       notes: entry.notes || '',
     })
+    setSmartTimeText('')
+    setSmartTimeSummary(null)
     setDialogOpen(true)
+  }
+
+  const handleSmartTimeCapture = () => {
+    const result = captureTimeEntryFromText(smartTimeTextareaRef.current?.value ?? smartTimeText)
+    setFormData({
+      ...formData,
+      date: result.date,
+      start_time: result.start_time,
+      end_time: result.end_time,
+      notes: result.notes,
+    })
+    setSmartTimeSummary(`${result.reason} Estimated ${formatDuration(result.duration_minutes)}.`)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -368,6 +388,49 @@ export default function TimeEntriesPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
+              {!selectedEntry && (
+                <div className="rounded-lg border bg-primary/5 p-3">
+                  <div className="mb-3 flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <Wand2 className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Smart time capture</p>
+                      <p className="text-sm text-muted-foreground">
+                        Describe the work and Alpha will fill the time entry.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <Textarea
+                      ref={smartTimeTextareaRef}
+                      value={smartTimeText}
+                      onChange={(e) => {
+                        setSmartTimeText(e.target.value)
+                        setSmartTimeSummary(null)
+                      }}
+                      placeholder="Example: Website edits 2.5 hours yesterday"
+                      rows={2}
+                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {smartTimeSummary || 'Alpha looks for work notes, dates, durations, and time ranges.'}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSmartTimeCapture}
+                        disabled={!smartTimeText.trim()}
+                        className="shrink-0 gap-2"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                        Fill time entry
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="project">Project</Label>
                 <Select
