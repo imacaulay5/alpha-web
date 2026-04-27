@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { getClients, createClient, updateClient, deleteClient } from '@/services/clients.service'
 import type { Client } from '@/types/models'
@@ -36,9 +36,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Users, Pencil, Trash2, Loader2, Mail, Phone } from 'lucide-react'
+import { Plus, Users, Pencil, Trash2, Loader2, Mail, Phone, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AccountType } from '@/types/enums'
+import { captureContactFromText } from '@/lib/contact-ai'
 
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error) return error.message
@@ -57,6 +58,9 @@ export default function ClientsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [saving, setSaving] = useState(false)
+  const [smartContactText, setSmartContactText] = useState('')
+  const [smartContactSummary, setSmartContactSummary] = useState<string | null>(null)
+  const smartContactTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -105,6 +109,8 @@ export default function ClientsPage() {
       zip_code: '',
       notes: '',
     })
+    setSmartContactText('')
+    setSmartContactSummary(null)
     setDialogOpen(true)
   }
 
@@ -121,7 +127,26 @@ export default function ClientsPage() {
       zip_code: client.zip_code || '',
       notes: client.notes || '',
     })
+    setSmartContactText('')
+    setSmartContactSummary(null)
     setDialogOpen(true)
+  }
+
+  const handleSmartContactCapture = () => {
+    const result = captureContactFromText(smartContactTextareaRef.current?.value ?? smartContactText)
+    setFormData({
+      ...formData,
+      name: result.name ?? formData.name,
+      contact_name: result.contact_name ?? formData.contact_name,
+      email: result.email ?? formData.email,
+      phone: result.phone ?? formData.phone,
+      address: result.address ?? formData.address,
+      city: result.city ?? formData.city,
+      state: result.state ?? formData.state,
+      zip_code: result.zip_code ?? formData.zip_code,
+      notes: formData.notes || result.notes || '',
+    })
+    setSmartContactSummary(result.reason)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -301,6 +326,49 @@ export default function ClientsPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit}>
             <div className="grid gap-4 py-4">
+              {!selectedClient && (
+                <div className="rounded-lg border bg-primary/5 p-3">
+                  <div className="mb-3 flex items-start gap-3">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <Wand2 className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Smart contact capture</p>
+                      <p className="text-sm text-muted-foreground">
+                        Paste a client signature or contact block and Alpha will fill what it can.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <Textarea
+                      ref={smartContactTextareaRef}
+                      value={smartContactText}
+                      onChange={(e) => {
+                        setSmartContactText(e.target.value)
+                        setSmartContactSummary(null)
+                      }}
+                      placeholder={'Example:\nAcme Studio\nContact: Jane Lee\njane@acme.test\n(555) 123-4567\n123 Market St, Austin, TX 78701'}
+                      rows={4}
+                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {smartContactSummary || 'Alpha looks for company, contact, email, phone, and address.'}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSmartContactCapture}
+                        disabled={!smartContactText.trim()}
+                        className="shrink-0 gap-2"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                        Fill client
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Company/Client Name *</Label>
