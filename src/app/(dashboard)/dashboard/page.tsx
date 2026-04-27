@@ -50,6 +50,14 @@ type AiNextStep = {
   priority: 'high' | 'medium' | 'low'
 }
 
+type CloseChecklistItem = {
+  id: string
+  label: string
+  detail: string
+  href: string
+  done: boolean
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
 }
@@ -262,6 +270,68 @@ function getPriorityVariant(priority: AiNextStep['priority']): 'default' | 'seco
   }
 }
 
+function getMonthlyCloseChecklist(accountType: AccountType, bills: Bill[], expenses: Expense[]): CloseChecklistItem[] {
+  if (accountType === AccountType.personal) {
+    const unpaidBills = bills.filter(
+      bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
+    )
+    const uncategorizedExpenses = expenses.filter((expense) => !expense.category)
+    const monthStart = startOfMonth(new Date())
+    const expensesThisMonth = expenses.filter((expense) => {
+      const expenseDate = parseISO(expense.expense_date)
+      return !isBefore(expenseDate, monthStart)
+    })
+
+    return [
+      {
+        id: 'personal-bills',
+        label: 'Review unpaid bills',
+        detail: unpaidBills.length ? `${unpaidBills.length} bills still need attention.` : 'All tracked bills are settled.',
+        href: '/bills',
+        done: unpaidBills.length === 0,
+      },
+      {
+        id: 'personal-expenses',
+        label: 'Categorize spending',
+        detail: uncategorizedExpenses.length ? `${uncategorizedExpenses.length} expenses need categories.` : 'Expenses are ready for reporting.',
+        href: '/expenses',
+        done: uncategorizedExpenses.length === 0,
+      },
+      {
+        id: 'personal-tax',
+        label: 'Prepare tax records',
+        detail: expensesThisMonth.length ? `${expensesThisMonth.length} expenses can feed tax prep.` : 'Add this month\'s expenses before export.',
+        href: '/tax',
+        done: expensesThisMonth.length > 0,
+      },
+    ]
+  }
+
+  return [
+    {
+      id: 'business-invoices',
+      label: 'Review open invoices',
+      detail: 'Draft reminders for sent or overdue invoices.',
+      href: '/invoices',
+      done: false,
+    },
+    {
+      id: 'business-expenses',
+      label: 'Capture missing expenses',
+      detail: 'Use smart capture to keep spending categorized.',
+      href: '/expenses',
+      done: false,
+    },
+    {
+      id: 'business-tax',
+      label: 'Check tax prep',
+      detail: 'Review income and expenses before exporting records.',
+      href: '/tax',
+      done: false,
+    },
+  ]
+}
+
 // Freelancer account dashboard stats
 const freelancerStats: DashboardStat[] = [
   { title: 'Billable Hours', value: '142h', change: '+12.5%', trend: 'up', icon: Clock },
@@ -342,6 +412,7 @@ export default function DashboardPage() {
     accountType === AccountType.personal
       ? getPersonalNextSteps(personalBills, personalExpenses)
       : getSampleNextSteps(accountType)
+  const monthlyCloseChecklist = getMonthlyCloseChecklist(accountType, personalBills, personalExpenses)
 
   const unpaidBills = personalBills.filter(
     bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
@@ -459,7 +530,37 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Activity & Quick Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5" />
+              Monthly Close
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {monthlyCloseChecklist.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => router.push(item.href)}
+                  className="flex w-full items-start gap-3 rounded-lg bg-muted/50 p-3 text-left transition-colors hover:bg-accent"
+                >
+                  {item.done ? (
+                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                  ) : (
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                  )}
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{item.label}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{item.detail}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
