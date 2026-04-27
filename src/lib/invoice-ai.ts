@@ -9,6 +9,14 @@ export type InvoiceReminderDraft = {
   reason: string
 }
 
+export type InvoiceLineCaptureResult = {
+  description: string
+  quantity: number
+  rate: number
+  amount: number
+  reason: string
+}
+
 function formatCurrency(value: number, currency = 'USD') {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -49,5 +57,49 @@ export function draftInvoiceReminder(invoice: Invoice): InvoiceReminderDraft {
     reason: isOverdue
       ? 'This invoice is overdue, so Alpha drafted a firmer but still polite follow-up.'
       : 'This invoice is still open, so Alpha drafted a friendly payment reminder.',
+  }
+}
+
+function cleanLineDescription(text: string) {
+  return text
+    .replace(/\b\d+(?:\.\d+)?\s*(?:hours?|hrs?|x)\b/gi, ' ')
+    .replace(/\b(?:at|@)\s*\$?\d+(?:,\d{3})*(?:\.\d{1,2})?\b/gi, ' ')
+    .replace(/\b\$?\d+(?:,\d{3})*(?:\.\d{1,2})?\s*(?:per|\/)\s*(?:hour|hr)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function titleCaseSentence(value: string) {
+  if (!value) return 'Professional services'
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+export function captureInvoiceLineFromText(text: string): InvoiceLineCaptureResult {
+  const quantityMatch =
+    text.match(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b/i) ??
+    text.match(/\b(\d+(?:\.\d+)?)\s*x\b/i)
+  const rateMatch =
+    text.match(/\b(?:at|@)\s*\$?(\d+(?:,\d{3})*(?:\.\d{1,2})?)\b/i) ??
+    text.match(/\b\$?(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:per|\/)\s*(?:hour|hr)\b/i)
+  const flatAmountMatch = text.match(/\$?(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:flat|fixed|total)\b/i)
+
+  const quantity = quantityMatch ? Number(quantityMatch[1]) : 1
+  const rate = rateMatch
+    ? Number(rateMatch[1].replace(/,/g, ''))
+    : flatAmountMatch
+      ? Number(flatAmountMatch[1].replace(/,/g, ''))
+      : 0
+  const description = titleCaseSentence(cleanLineDescription(text))
+
+  return {
+    description,
+    quantity,
+    rate,
+    amount: quantity * rate,
+    reason: rateMatch
+      ? 'Alpha found a quantity and rate in your note.'
+      : flatAmountMatch
+        ? 'Alpha found a flat amount and treated it as one line item.'
+        : 'Alpha found a description. Add a rate if the amount is missing.',
   }
 }

@@ -54,7 +54,7 @@ import { Plus, FileText, Pencil, Trash2, Loader2, DollarSign, Send, Download, Ey
 import { toast } from 'sonner'
 import { format, addDays } from 'date-fns'
 import { formatDateOnly } from '@/lib/date-format'
-import { canDraftInvoiceReminder, draftInvoiceReminder, type InvoiceReminderDraft } from '@/lib/invoice-ai'
+import { canDraftInvoiceReminder, captureInvoiceLineFromText, draftInvoiceReminder, type InvoiceReminderDraft } from '@/lib/invoice-ai'
 
 function getStatusVariant(status: InvoiceStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
@@ -95,6 +95,8 @@ export default function InvoicesPage() {
   const [reminderDialogOpen, setReminderDialogOpen] = useState(false)
   const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null)
   const [reminderDraft, setReminderDraft] = useState<InvoiceReminderDraft | null>(null)
+  const [lineCaptureText, setLineCaptureText] = useState('')
+  const [lineCaptureSummary, setLineCaptureSummary] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     client_id: '',
@@ -152,6 +154,8 @@ export default function InvoicesPage() {
       notes: '',
     })
     setLineItems([{ description: '', quantity: 1, rate: 0, amount: 0 }])
+    setLineCaptureText('')
+    setLineCaptureSummary(null)
     setDialogOpen(true)
   }
 
@@ -178,6 +182,8 @@ export default function InvoicesPage() {
             }))
         : [{ description: '', quantity: 1, rate: 0, amount: 0 }]
     )
+    setLineCaptureText('')
+    setLineCaptureSummary(null)
     setDialogOpen(true)
   }
 
@@ -201,6 +207,24 @@ export default function InvoicesPage() {
     if (lineItems.length > 1) {
       setLineItems(lineItems.filter((_, i) => i !== index))
     }
+  }
+
+  const handleLineCapture = () => {
+    const captured = captureInvoiceLineFromText(lineCaptureText)
+    const nextLine = {
+      description: captured.description,
+      quantity: captured.quantity,
+      rate: captured.rate,
+      amount: captured.amount,
+    }
+    const hasOnlyEmptyLine =
+      lineItems.length === 1 &&
+      !lineItems[0].description &&
+      lineItems[0].quantity === 1 &&
+      lineItems[0].rate === 0
+
+    setLineItems(hasOnlyEmptyLine ? [nextLine] : [...lineItems, nextLine])
+    setLineCaptureSummary(captured.reason)
   }
 
   const calculateTotals = (taxRateOverride?: number) => {
@@ -635,6 +659,48 @@ export default function InvoicesPage() {
               <div className="space-y-2">
                 <Label>Line Items</Label>
                 <div className="border rounded-lg p-4 space-y-2">
+                  {isCreateMode && (
+                    <div className="mb-4 rounded-lg border bg-primary/5 p-3">
+                      <div className="mb-3 flex items-start gap-3">
+                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                          <Wand2 className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Smart line capture</p>
+                          <p className="text-sm text-muted-foreground">
+                            Describe the work and Alpha will add an invoice line.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <Textarea
+                          value={lineCaptureText}
+                          onChange={(e) => {
+                            setLineCaptureText(e.target.value)
+                            setLineCaptureSummary(null)
+                          }}
+                          placeholder="Example: Design work 12 hours at 90"
+                          rows={2}
+                        />
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            {lineCaptureSummary || 'Alpha looks for description, hours, and rate.'}
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleLineCapture}
+                            disabled={!lineCaptureText.trim()}
+                            className="shrink-0 gap-2"
+                          >
+                            <Wand2 className="h-4 w-4" />
+                            Add smart line
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {lineItems.map((item, index) => (
                     <div key={index} className="grid grid-cols-12 gap-2 items-end">
                       <div className="col-span-5">
