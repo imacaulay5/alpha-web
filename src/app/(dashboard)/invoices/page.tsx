@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppState } from '@/contexts/AppStateContext'
@@ -97,6 +97,7 @@ export default function InvoicesPage() {
   const [reminderDraft, setReminderDraft] = useState<InvoiceReminderDraft | null>(null)
   const [lineCaptureText, setLineCaptureText] = useState('')
   const [lineCaptureSummary, setLineCaptureSummary] = useState<string | null>(null)
+  const lineCaptureTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   const [formData, setFormData] = useState({
     client_id: '',
@@ -209,8 +210,8 @@ export default function InvoicesPage() {
     }
   }
 
-  const handleLineCapture = () => {
-    const captured = captureInvoiceLineFromText(lineCaptureText)
+  const handleLineCapture = (text = lineCaptureTextareaRef.current?.value ?? lineCaptureText) => {
+    const captured = captureInvoiceLineFromText(text)
     const nextLine = {
       description: captured.description,
       quantity: captured.quantity,
@@ -674,6 +675,7 @@ export default function InvoicesPage() {
                       </div>
                       <div className="space-y-3">
                         <Textarea
+                          ref={lineCaptureTextareaRef}
                           value={lineCaptureText}
                           onChange={(e) => {
                             setLineCaptureText(e.target.value)
@@ -690,7 +692,7 @@ export default function InvoicesPage() {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={handleLineCapture}
+                            onClick={() => handleLineCapture()}
                             disabled={!lineCaptureText.trim()}
                             className="shrink-0 gap-2"
                           >

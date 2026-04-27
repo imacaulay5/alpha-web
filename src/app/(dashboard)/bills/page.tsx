@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppState } from '@/contexts/AppStateContext'
 
@@ -98,9 +98,11 @@ import {
   FileStack,
   ShoppingCart,
   Send,
+  Wand2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO, differenceInDays, addDays } from 'date-fns'
+import { captureInvoiceLineFromText } from '@/lib/invoice-ai'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -363,6 +365,9 @@ function AccountsPayableView() {
   const [savingBill, setSavingBill] = useState(false)
   const [billForm, setBillForm] = useState({ vendor_id: '', bill_number: '', issue_date: format(new Date(), 'yyyy-MM-dd'), due_date: format(addDays(new Date(), 30), 'yyyy-MM-dd'), tax_rate: '0', notes: '' })
   const [billLines, setBillLines] = useState<LineItemRow[]>([{ description: '', quantity: 1, rate: 0, amount: 0 }])
+  const [billLineCaptureText, setBillLineCaptureText] = useState('')
+  const [billLineCaptureSummary, setBillLineCaptureSummary] = useState<string | null>(null)
+  const billLineCaptureTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   // PO dialog
   const [poDialog, setPODialog] = useState(false)
@@ -434,7 +439,27 @@ function AccountsPayableView() {
     const num = await generateBillNumber()
     setBillForm({ vendor_id: '', bill_number: num, issue_date: format(new Date(), 'yyyy-MM-dd'), due_date: format(addDays(new Date(), 30), 'yyyy-MM-dd'), tax_rate: '0', notes: '' })
     setBillLines([{ description: '', quantity: 1, rate: 0, amount: 0 }])
+    setBillLineCaptureText('')
+    setBillLineCaptureSummary(null)
     setBillDialog(true)
+  }
+
+  const handleBillLineCapture = (text = billLineCaptureTextareaRef.current?.value ?? billLineCaptureText) => {
+    const captured = captureInvoiceLineFromText(text)
+    const nextLine = {
+      description: captured.description,
+      quantity: captured.quantity,
+      rate: captured.rate,
+      amount: captured.amount,
+    }
+    const hasOnlyEmptyLine =
+      billLines.length === 1 &&
+      !billLines[0].description &&
+      billLines[0].quantity === 1 &&
+      billLines[0].rate === 0
+
+    setBillLines(hasOnlyEmptyLine ? [nextLine] : [...billLines, nextLine])
+    setBillLineCaptureSummary(captured.reason)
   }
 
   const handleSaveBill = async (e: React.FormEvent) => {
@@ -701,6 +726,47 @@ function AccountsPayableView() {
               <div className="space-y-2">
                 <Label>Items</Label>
                 <div className="border rounded-lg p-3 space-y-2">
+                  <div className="mb-4 rounded-lg border bg-primary/5 p-3">
+                    <div className="mb-3 flex items-start gap-3">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                        <Wand2 className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">Smart bill line</p>
+                        <p className="text-sm text-muted-foreground">
+                          Describe the vendor charge and Alpha will add an item.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <Textarea
+                        ref={billLineCaptureTextareaRef}
+                        value={billLineCaptureText}
+                        onChange={(e) => {
+                          setBillLineCaptureText(e.target.value)
+                          setBillLineCaptureSummary(null)
+                        }}
+                        placeholder="Example: Cloud hosting 1 at 89.99"
+                        rows={2}
+                      />
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          {billLineCaptureSummary || 'Alpha looks for description, quantity, and rate.'}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleBillLineCapture()}
+                          disabled={!billLineCaptureText.trim()}
+                          className="shrink-0 gap-2"
+                        >
+                          <Wand2 className="h-4 w-4" />
+                          Add smart item
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-12 gap-2 text-xs font-medium text-muted-foreground"><div className="col-span-5">Description</div><div className="col-span-2">Qty</div><div className="col-span-2">Rate</div><div className="col-span-2 text-right">Amount</div><div className="col-span-1" /></div>
                   {billLines.map((line, i) => (
                     <div key={i} className="grid grid-cols-12 gap-2 items-center">
