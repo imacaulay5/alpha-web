@@ -50,10 +50,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { Plus, FileText, Pencil, Trash2, Loader2, DollarSign, Send, Download, Eye } from 'lucide-react'
+import { Plus, FileText, Pencil, Trash2, Loader2, DollarSign, Send, Download, Eye, Wand2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, addDays } from 'date-fns'
 import { formatDateOnly } from '@/lib/date-format'
+import { canDraftInvoiceReminder, draftInvoiceReminder, type InvoiceReminderDraft } from '@/lib/invoice-ai'
 
 function getStatusVariant(status: InvoiceStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
@@ -91,6 +92,9 @@ export default function InvoicesPage() {
   const [pdfInvoice, setPdfInvoice] = useState<Invoice | null>(null)
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
   const [loadingPdf, setLoadingPdf] = useState<string | null>(null)
+  const [reminderDialogOpen, setReminderDialogOpen] = useState(false)
+  const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null)
+  const [reminderDraft, setReminderDraft] = useState<InvoiceReminderDraft | null>(null)
 
   const [formData, setFormData] = useState({
     client_id: '',
@@ -331,6 +335,12 @@ export default function InvoicesPage() {
     }
   }
 
+  const openReminderDraft = (invoice: Invoice) => {
+    setReminderInvoice(invoice)
+    setReminderDraft(draftInvoiceReminder(invoice))
+    setReminderDialogOpen(true)
+  }
+
   // Calculate totals
   const totalOutstanding = invoices
     .filter(i => i.status === InvoiceStatus.sent || i.status === InvoiceStatus.overdue)
@@ -476,6 +486,16 @@ export default function InvoicesPage() {
                           title="Mark as Sent"
                         >
                           <Send className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {canDraftInvoiceReminder(invoice) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openReminderDraft(invoice)}
+                          title="Draft Reminder"
+                        >
+                          <Wand2 className="w-4 h-4" />
                         </Button>
                       )}
                       <Button
@@ -733,6 +753,58 @@ export default function InvoicesPage() {
           onOpenChange={setPdfPreviewOpen}
         />
       )}
+
+      {/* AI Reminder Draft */}
+      <Dialog open={reminderDialogOpen} onOpenChange={setReminderDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="h-5 w-5 text-primary" />
+              Payment Reminder Draft
+            </DialogTitle>
+            <DialogDescription>
+              Review and edit this message before sending it outside Alpha.
+            </DialogDescription>
+          </DialogHeader>
+          {reminderDraft && reminderInvoice && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg border bg-primary/5 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={reminderDraft.tone === 'firm' ? 'destructive' : 'secondary'}>
+                    {reminderDraft.tone}
+                  </Badge>
+                  <p className="text-sm text-muted-foreground">{reminderDraft.reason}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reminder_subject">Subject</Label>
+                <Input
+                  id="reminder_subject"
+                  value={reminderDraft.subject}
+                  onChange={(e) => setReminderDraft({ ...reminderDraft, subject: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reminder_body">Message</Label>
+                <Textarea
+                  id="reminder_body"
+                  value={reminderDraft.body}
+                  onChange={(e) => setReminderDraft({ ...reminderDraft, body: e.target.value })}
+                  rows={8}
+                />
+              </div>
+              <div className="rounded-lg border p-3 text-sm text-muted-foreground">
+                Invoice {reminderInvoice.invoice_number} · {reminderInvoice.client?.name || 'No client'} · ${reminderInvoice.total.toFixed(2)}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setReminderDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
