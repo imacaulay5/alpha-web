@@ -6,7 +6,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppState } from '@/contexts/AppStateContext'
 import { getInvoices, getInvoice, createInvoice, updateInvoice, deleteInvoice, generateInvoiceNumber } from '@/services/invoices.service'
 import { getClients } from '@/services/clients.service'
-import type { Invoice, Client, CreateInvoiceInput, CreateInvoiceLineItemInput } from '@/types/models'
+import { getTimeEntries } from '@/services/time-entries.service'
+import type { Invoice, Client, CreateInvoiceInput, CreateInvoiceLineItemInput, TimeEntry } from '@/types/models'
 import { AccountType, InvoiceStatus, invoiceStatusLabels } from '@/types/enums'
 
 // Load PDF utilities client-side only (react-pdf doesn't support SSR)
@@ -54,7 +55,14 @@ import { Plus, FileText, Pencil, Trash2, Loader2, DollarSign, Send, Download, Ey
 import { toast } from 'sonner'
 import { format, addDays } from 'date-fns'
 import { formatDateOnly } from '@/lib/date-format'
-import { canDraftInvoiceReminder, captureInvoiceLineFromText, draftInvoiceReminder, type InvoiceReminderDraft } from '@/lib/invoice-ai'
+import {
+  canDraftInvoiceReminder,
+  captureInvoiceLineFromText,
+  draftInvoiceLinesFromTimeEntries,
+  draftInvoiceReminder,
+  getInvoiceableTimeEntries,
+  type InvoiceReminderDraft,
+} from '@/lib/invoice-ai'
 
 function getStatusVariant(status: InvoiceStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
@@ -83,6 +91,7 @@ export default function InvoicesPage() {
   const { organization } = useAppState()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [clients, setClients] = useState<Client[]>([])
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -97,6 +106,7 @@ export default function InvoicesPage() {
   const [reminderDraft, setReminderDraft] = useState<InvoiceReminderDraft | null>(null)
   const [lineCaptureText, setLineCaptureText] = useState('')
   const [lineCaptureSummary, setLineCaptureSummary] = useState<string | null>(null)
+  const [timeDraftSummary, setTimeDraftSummary] = useState<string | null>(null)
   const lineCaptureTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   const [formData, setFormData] = useState({
@@ -121,7 +131,7 @@ export default function InvoicesPage() {
   const loadData = async () => {
     try {
       setError(null)
-      const [invoicesData, clientsData] = await Promise.all([
+      const [invoicesData, clientsData, timeEntriesData] = await Promise.all([
         getInvoices({
           userId: user?.id,
           organizationId: user?.organization_id,
@@ -130,9 +140,11 @@ export default function InvoicesPage() {
           userId: user?.id,
           organizationId: user?.organization_id,
         }),
+        getTimeEntries(),
       ])
       setInvoices(invoicesData)
       setClients(clientsData)
+      setTimeEntries(timeEntriesData)
     } catch (err) {
       console.error('Failed to load invoices data:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to load data'
@@ -157,6 +169,7 @@ export default function InvoicesPage() {
     setLineItems([{ description: '', quantity: 1, rate: 0, amount: 0 }])
     setLineCaptureText('')
     setLineCaptureSummary(null)
+    setTimeDraftSummary(null)
     setDialogOpen(true)
   }
 
@@ -185,6 +198,7 @@ export default function InvoicesPage() {
     )
     setLineCaptureText('')
     setLineCaptureSummary(null)
+    setTimeDraftSummary(null)
     setDialogOpen(true)
   }
 
@@ -226,6 +240,27 @@ export default function InvoicesPage() {
 
     setLineItems(hasOnlyEmptyLine ? [nextLine] : [...lineItems, nextLine])
     setLineCaptureSummary(captured.reason)
+  }
+
+  const handleDraftFromTime = () => {
+    const draft = draftInvoiceLinesFromTimeEntries(timeEntries, Number(user?.hourly_rate ?? 0))
+    if (draft.lineItems.length === 0) {
+      setTimeDraftSummary(draft.summary)
+      return
+    }
+
+    const hasOnlyEmptyLine =
+      lineItems.length === 1 &&
+      !lineItems[0].description &&
+      lineItems[0].quantity === 1 &&
+      lineItems[0].rate === 0
+
+    setLineItems(hasOnlyEmptyLine ? draft.lineItems : [...lineItems, ...draft.lineItems])
+    setTimeDraftSummary(draft.summary)
+
+    if (draft.clientId && !formData.client_id && clients.some(client => client.id === draft.clientId)) {
+      setFormData({ ...formData, client_id: draft.clientId })
+    }
   }
 
   const calculateTotals = (taxRateOverride?: number) => {
@@ -397,6 +432,7 @@ export default function InvoicesPage() {
   }
 
   const { subtotal, taxAmount, total } = calculateTotals()
+  const invoiceableTimeEntries = getInvoiceableTimeEntries(timeEntries)
 
   return (
     <div className="p-6 space-y-6">
@@ -700,6 +736,29 @@ export default function InvoicesPage() {
                             Add smart line
                           </Button>
                         </div>
+                      </div>
+                    </div>
+                  )}
+                  {isCreateMode && (
+                    <div className="mb-4 rounded-lg border bg-muted/40 p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Draft from tracked time</p>
+                          <p className="text-sm text-muted-foreground">
+                            {timeDraftSummary || `${invoiceableTimeEntries.length} unbilled time ${invoiceableTimeEntries.length === 1 ? 'entry is' : 'entries are'} ready for invoice lines.`}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleDraftFromTime}
+                          disabled={invoiceableTimeEntries.length === 0}
+                          className="shrink-0 gap-2"
+                        >
+                          <Wand2 className="h-4 w-4" />
+                          Add time lines
+                        </Button>
                       </div>
                     </div>
                   )}

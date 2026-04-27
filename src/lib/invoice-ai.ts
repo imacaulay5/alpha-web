@@ -1,6 +1,6 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns'
-import { InvoiceStatus } from '@/types/enums'
-import type { Invoice } from '@/types/models'
+import { InvoiceStatus, TimeEntryStatus } from '@/types/enums'
+import type { Invoice, TimeEntry } from '@/types/models'
 
 export type InvoiceReminderDraft = {
   tone: 'friendly' | 'firm'
@@ -15,6 +15,12 @@ export type InvoiceLineCaptureResult = {
   rate: number
   amount: number
   reason: string
+}
+
+export type TimeInvoiceDraft = {
+  lineItems: InvoiceLineCaptureResult[]
+  summary: string
+  clientId?: string
 }
 
 function formatCurrency(value: number, currency = 'USD') {
@@ -101,5 +107,70 @@ export function captureInvoiceLineFromText(text: string): InvoiceLineCaptureResu
       : flatAmountMatch
         ? 'Alpha found a flat amount and treated it as one line item.'
         : 'Alpha found a description. Add a rate if the amount is missing.',
+  }
+}
+
+function getEntryHours(entry: TimeEntry) {
+  if (entry.duration_minutes) return Math.max(entry.duration_minutes / 60, 0)
+  if (!entry.end_at) return 0
+  const start = parseISO(entry.start_at)
+  const end = parseISO(entry.end_at)
+  return Math.max((end.getTime() - start.getTime()) / 3600000, 0)
+}
+
+function getEntryRate(entry: TimeEntry, fallbackRate = 0) {
+  return entry.billable_rate ?? entry.task?.rate ?? entry.project?.rate ?? fallbackRate
+}
+
+function getEntryDescription(entry: TimeEntry) {
+  const projectName = entry.project?.name
+  const taskName = entry.task?.name
+  const note = entry.notes?.trim()
+
+  if (projectName && taskName) return `${projectName}: ${taskName}`
+  if (projectName) return projectName
+  if (taskName) return taskName
+  if (note) return titleCaseSentence(note)
+  return 'Billable work'
+}
+
+export function getInvoiceableTimeEntries(entries: TimeEntry[]) {
+  return entries.filter((entry) => (
+    !entry.invoice_id &&
+    entry.status !== TimeEntryStatus.invoiced &&
+    entry.status !== TimeEntryStatus.rejected &&
+    getEntryHours(entry) > 0
+  ))
+}
+
+export function draftInvoiceLinesFromTimeEntries(entries: TimeEntry[], fallbackRate = 0): TimeInvoiceDraft {
+  const invoiceableEntries = getInvoiceableTimeEntries(entries)
+  const clientIds = Array.from(new Set(
+    invoiceableEntries
+      .map(entry => entry.project?.client_id)
+      .filter((id): id is string => Boolean(id))
+  ))
+
+  const lineItems = invoiceableEntries.slice(0, 8).map((entry) => {
+    const quantity = Number(getEntryHours(entry).toFixed(2))
+    const rate = getEntryRate(entry, fallbackRate)
+    return {
+      description: getEntryDescription(entry),
+      quantity,
+      rate,
+      amount: quantity * rate,
+      reason: 'Alpha turned an unbilled time entry into an invoice line.',
+    }
+  })
+
+  const totalHours = lineItems.reduce((sum, item) => sum + item.quantity, 0)
+  const totalAmount = lineItems.reduce((sum, item) => sum + item.amount, 0)
+
+  return {
+    lineItems,
+    summary: lineItems.length > 0
+      ? `Alpha found ${totalHours.toFixed(2)} unbilled hours worth ${formatCurrency(totalAmount)}.`
+      : 'No unbilled time entries are ready to invoice.',
+    clientId: clientIds.length === 1 ? clientIds[0] : undefined,
   }
 }
