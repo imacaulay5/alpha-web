@@ -9,6 +9,16 @@ import type { Bill, Expense } from '@/types/models'
 import { AccountType, BillStatus, Capability, ExpenseStatus } from '@/types/enums'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Progress } from '@/components/ui/progress'
 import {
   TrendingUp,
   TrendingDown,
@@ -22,6 +32,7 @@ import {
   CreditCard,
   CalendarClock,
   Wand2,
+  ArrowRight,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { getQuickActions } from '@/lib/quick-actions'
@@ -439,6 +450,8 @@ export default function DashboardPage() {
   const [personalBills, setPersonalBills] = useState<Bill[]>([])
   const [personalExpenses, setPersonalExpenses] = useState<Expense[]>([])
   const [personalDashboardError, setPersonalDashboardError] = useState<string | null>(null)
+  const [closeGuideOpen, setCloseGuideOpen] = useState(false)
+  const [activeCloseStepId, setActiveCloseStepId] = useState<string | null>(null)
 
   const accountType = user?.account_type || AccountType.personal
 
@@ -501,6 +514,12 @@ export default function DashboardPage() {
     accountType === AccountType.personal
       ? getPersonalMonthlySummary(personalBills, personalExpenses)
       : getSampleMonthlySummary(accountType)
+  const completedCloseSteps = monthlyCloseChecklist.filter(item => item.done).length
+  const monthlyCloseProgress = Math.round((completedCloseSteps / monthlyCloseChecklist.length) * 100)
+  const activeCloseStep =
+    monthlyCloseChecklist.find(item => item.id === activeCloseStepId) ??
+    monthlyCloseChecklist.find(item => !item.done) ??
+    monthlyCloseChecklist[0]
 
   const unpaidBills = personalBills.filter(
     bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
@@ -646,12 +665,33 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5" />
-              Monthly Close
-            </CardTitle>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5" />
+                  Monthly Close
+                </CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {completedCloseSteps}/{monthlyCloseChecklist.length} steps ready
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setActiveCloseStepId(activeCloseStep.id)
+                  setCloseGuideOpen(true)
+                }}
+                className="shrink-0 gap-2"
+              >
+                Start close
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
+            <Progress value={monthlyCloseProgress} className="mb-4" />
             <div className="space-y-3">
               {monthlyCloseChecklist.map((item) => (
                 <button
@@ -753,6 +793,77 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={closeGuideOpen} onOpenChange={setCloseGuideOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Guided Monthly Close</DialogTitle>
+            <DialogDescription>
+              Work through the few checks that keep records clean before month end.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">{completedCloseSteps}/{monthlyCloseChecklist.length} steps ready</span>
+                <span className="text-muted-foreground">{monthlyCloseProgress}%</span>
+              </div>
+              <Progress value={monthlyCloseProgress} />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-[0.9fr_1.1fr]">
+              <div className="space-y-2">
+                {monthlyCloseChecklist.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveCloseStepId(item.id)}
+                    className={`flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
+                      activeCloseStep.id === item.id ? 'border-primary bg-primary/5' : 'bg-muted/30 hover:bg-accent'
+                    }`}
+                  >
+                    {item.done ? (
+                      <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                    ) : (
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                    )}
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{item.label}</span>
+                      <span className="mt-1 block text-xs text-muted-foreground">{item.done ? 'Ready' : 'Needs review'}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="rounded-lg border bg-background p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Badge variant={activeCloseStep.done ? 'default' : 'secondary'}>
+                    {activeCloseStep.done ? 'Ready' : 'Review'}
+                  </Badge>
+                  <h2 className="text-sm font-semibold">{activeCloseStep.label}</h2>
+                </div>
+                <p className="text-sm text-muted-foreground">{activeCloseStep.detail}</p>
+                <div className="mt-5 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+                  Finish this step in its workspace, then return to the dashboard. Alpha will refresh the close status from your records.
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCloseGuideOpen(false)}>
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={() => router.push(activeCloseStep.href)}
+              className="gap-2"
+            >
+              Open step
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
