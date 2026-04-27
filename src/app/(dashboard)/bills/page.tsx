@@ -139,6 +139,15 @@ function getPOStatusVariant(status: PurchaseOrderStatus): 'default' | 'secondary
 
 interface LineItemRow { description: string; quantity: number; rate: number; amount: number }
 
+type BillReminderItem = {
+  id: string
+  title: string
+  detail: string
+  amount: number
+  badge: string
+  tone: 'action' | 'watch' | 'ready'
+}
+
 // ─────────────────────────────────────────────────────────────
 // PERSONAL BILLS VIEW
 // ─────────────────────────────────────────────────────────────
@@ -208,17 +217,49 @@ function PersonalBillsView() {
     catch { toast.error('Failed to update bill') }
   }
 
-  const unpaid = bills.filter(b => b.status !== BillStatus.paid && b.status !== BillStatus.cancelled)
-  const paid = bills.filter(b => b.status === BillStatus.paid)
-  const overdue = bills.filter(b => b.status === BillStatus.overdue)
-  const recurring = bills.filter(b => b.recurrence !== BillRecurrence.once)
-
   const getDaysLabel = (dueDate: string) => {
     const d = differenceInDays(parseISO(dueDate), new Date())
     if (d < 0) return `${Math.abs(d)}d overdue`
     if (d === 0) return 'Due today'
     return `${d}d left`
   }
+
+  const unpaid = bills.filter(b => b.status !== BillStatus.paid && b.status !== BillStatus.cancelled)
+  const paid = bills.filter(b => b.status === BillStatus.paid)
+  const overdue = unpaid.filter(b => b.status === BillStatus.overdue || differenceInDays(parseISO(b.due_date), new Date()) < 0)
+  const dueSoon = unpaid.filter((b) => {
+    const days = differenceInDays(parseISO(b.due_date), new Date())
+    return days >= 0 && days <= 7
+  })
+  const recurring = bills.filter(b => b.recurrence !== BillRecurrence.once)
+  const billReminderItems: BillReminderItem[] = [
+    ...overdue.slice(0, 2).map((bill) => ({
+      id: `overdue-${bill.id}`,
+      title: `${bill.name} is overdue`,
+      detail: `${bill.payee} was due ${getDaysLabel(bill.due_date)}.`,
+      amount: bill.amount,
+      badge: 'Overdue',
+      tone: 'action' as const,
+    })),
+    ...dueSoon.slice(0, 2).map((bill) => ({
+      id: `soon-${bill.id}`,
+      title: `${bill.name} is coming up`,
+      detail: `${bill.payee} is ${getDaysLabel(bill.due_date)}.`,
+      amount: bill.amount,
+      badge: bill.auto_pay ? 'Auto-pay' : 'Due soon',
+      tone: 'watch' as const,
+    })),
+  ]
+  const visibleBillReminderItems = billReminderItems.length > 0
+    ? billReminderItems.slice(0, 3)
+    : [{
+        id: 'clean',
+        title: 'No bill reminders need attention',
+        detail: 'Alpha will surface overdue and upcoming bills here as due dates get close.',
+        amount: 0,
+        badge: 'Ready',
+        tone: 'ready' as const,
+      }]
 
   const filtered = activeTab === 'upcoming' ? unpaid : activeTab === 'paid' ? paid : activeTab === 'recurring' ? recurring : bills
 
@@ -238,6 +279,47 @@ function PersonalBillsView() {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-destructive">Overdue</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{overdue.length}</div></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Recurring</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{recurring.length}</div></CardContent></Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wand2 className="w-4 h-4" />
+                Smart Bill Reminders
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Alpha watches due dates and brings the next bill actions forward.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setActiveTab('upcoming')}
+              className="shrink-0"
+            >
+              Review bills
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {visibleBillReminderItems.map((item) => (
+              <div key={item.id} className="rounded-lg border bg-muted/30 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <Badge variant={item.tone === 'action' ? 'destructive' : item.tone === 'ready' ? 'default' : 'secondary'}>
+                    {item.badge}
+                  </Badge>
+                  {item.amount > 0 && <span className="text-sm font-semibold">{formatCurrency(item.amount)}</span>}
+                </div>
+                <p className="text-sm font-medium">{item.title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -536,7 +618,39 @@ function AccountsPayableView() {
     if (b.status === BillStatus.paid || b.status === BillStatus.cancelled) return false
     return differenceInDays(parseISO(b.due_date), new Date()) < 0
   })
+  const dueSoonBills = unpaidBills.filter((bill) => {
+    const days = differenceInDays(parseISO(bill.due_date), new Date())
+    return days >= 0 && days <= 7
+  })
   const totalOutstanding = unpaidBills.reduce((s, b) => s + b.total, 0)
+  const vendorBillReminderItems: BillReminderItem[] = [
+    ...overdueBills.slice(0, 2).map((bill) => ({
+      id: `overdue-${bill.id}`,
+      title: `${bill.bill_number} is overdue`,
+      detail: `${bill.vendor?.name || 'Vendor bill'} was due ${format(parseISO(bill.due_date), 'MMM d, yyyy')}.`,
+      amount: bill.total,
+      badge: 'Overdue',
+      tone: 'action' as const,
+    })),
+    ...dueSoonBills.slice(0, 2).map((bill) => ({
+      id: `soon-${bill.id}`,
+      title: `${bill.bill_number} is due soon`,
+      detail: `${bill.vendor?.name || 'Vendor bill'} is due in ${differenceInDays(parseISO(bill.due_date), new Date())} day${differenceInDays(parseISO(bill.due_date), new Date()) === 1 ? '' : 's'}.`,
+      amount: bill.total,
+      badge: 'Due soon',
+      tone: 'watch' as const,
+    })),
+  ]
+  const visibleVendorBillReminderItems = vendorBillReminderItems.length > 0
+    ? vendorBillReminderItems.slice(0, 3)
+    : [{
+        id: 'clean',
+        title: 'No vendor bill reminders need attention',
+        detail: 'Overdue and near-term vendor bills will appear here automatically.',
+        amount: 0,
+        badge: 'Ready',
+        tone: 'ready' as const,
+      }]
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
   if (error) return <div className="p-6"><Card><CardContent className="text-center py-12"><p className="text-destructive">{error}</p><Button onClick={loadData} className="mt-4">Try Again</Button></CardContent></Card></div>
@@ -555,6 +669,39 @@ function AccountsPayableView() {
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-destructive">Overdue</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-destructive">{overdueBills.length}</div><p className="text-xs text-muted-foreground">past due date</p></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Open POs</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{pos.filter(p => p.status !== PurchaseOrderStatus.received && p.status !== PurchaseOrderStatus.cancelled).length}</div></CardContent></Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wand2 className="w-4 h-4" />
+                Smart Bill Reminders
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Alpha highlights overdue and upcoming vendor bills before they surprise cash flow.
+              </p>
+            </div>
+            {canManageBills && <Button type="button" variant="outline" size="sm" onClick={openCreateBill} className="shrink-0">New Bill</Button>}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {visibleVendorBillReminderItems.map((item) => (
+              <div key={item.id} className="rounded-lg border bg-muted/30 p-4">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <Badge variant={item.tone === 'action' ? 'destructive' : item.tone === 'ready' ? 'default' : 'secondary'}>
+                    {item.badge}
+                  </Badge>
+                  {item.amount > 0 && <span className="text-sm font-semibold">{formatCurrency(item.amount)}</span>}
+                </div>
+                <p className="text-sm font-medium">{item.title}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tabs */}
       <Tabs defaultValue="bills">
