@@ -58,6 +58,12 @@ type CloseChecklistItem = {
   done: boolean
 }
 
+type MonthlySummary = {
+  headline: string
+  body: string
+  highlights: string[]
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
 }
@@ -138,6 +144,84 @@ function getRecentPersonalActivity(bills: Bill[], expenses: Expense[]): RecentAc
     .sort((a, b) => b.date.getTime() - a.date.getTime())
     .slice(0, 4)
     .map(({ date: _date, ...activity }) => activity)
+}
+
+function getPersonalMonthlySummary(bills: Bill[], expenses: Expense[]): MonthlySummary {
+  const now = new Date()
+  const monthStart = startOfMonth(now)
+  const monthEnd = endOfMonth(now)
+  const expensesThisMonth = expenses.filter((expense) => {
+    const expenseDate = parseISO(expense.expense_date)
+    return !isBefore(expenseDate, monthStart) && !isAfter(expenseDate, monthEnd)
+  })
+  const paidBillsThisMonth = bills.filter((bill) => {
+    if (bill.status !== BillStatus.paid || !bill.paid_at) return false
+    const paidAt = parseISO(bill.paid_at)
+    return !isBefore(paidAt, monthStart) && !isAfter(paidAt, monthEnd)
+  })
+  const unpaidBills = bills.filter(
+    bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
+  )
+  const overdueBills = unpaidBills.filter(bill => differenceInDays(parseISO(bill.due_date), now) < 0)
+  const expenseTotal = expensesThisMonth.reduce((sum, expense) => sum + expense.amount, 0)
+  const paidBillTotal = paidBillsThisMonth.reduce((sum, bill) => sum + bill.amount, 0)
+  const unpaidBillTotal = unpaidBills.reduce((sum, bill) => sum + bill.amount, 0)
+  const categoryTotals = expensesThisMonth.reduce<Record<string, number>>((totals, expense) => {
+    const category = expense.category || 'Uncategorized'
+    totals[category] = (totals[category] || 0) + expense.amount
+    return totals
+  }, {})
+  const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]
+
+  if (expensesThisMonth.length === 0 && paidBillsThisMonth.length === 0 && unpaidBills.length === 0) {
+    return {
+      headline: 'No money movement tracked yet this month.',
+      body: 'Add bills and expenses as they happen and Alpha will turn them into a month-end summary.',
+      highlights: [
+        'Start with one recent expense.',
+        'Add upcoming bills before their due dates.',
+        'Use Tax Prep once records start building up.',
+      ],
+    }
+  }
+
+  return {
+    headline: overdueBills.length > 0
+      ? `${overdueBills.length} overdue ${overdueBills.length === 1 ? 'bill needs' : 'bills need'} attention.`
+      : unpaidBills.length > 0
+        ? `${formatCurrency(unpaidBillTotal)} in bills is still open.`
+        : 'Tracked bills are settled for now.',
+    body: `This month includes ${formatCurrency(expenseTotal)} in expenses and ${formatCurrency(paidBillTotal)} in paid bills.`,
+    highlights: [
+      topCategory ? `${topCategory[0]} is the largest expense category at ${formatCurrency(topCategory[1])}.` : 'No expense categories recorded yet.',
+      unpaidBills.length ? `${unpaidBills.length} unpaid ${unpaidBills.length === 1 ? 'bill remains' : 'bills remain'} on the list.` : 'No unpaid bills are currently tracked.',
+      overdueBills.length ? 'Handle overdue bills before closing the month.' : 'Keep recording new spending so reports stay useful.',
+    ],
+  }
+}
+
+function getSampleMonthlySummary(accountType: AccountType): MonthlySummary {
+  if (accountType === AccountType.freelancer) {
+    return {
+      headline: 'This month is invoice-first.',
+      body: 'Tracked work, open invoices, and tax set-asides should stay connected so cash does not surprise you.',
+      highlights: [
+        'Convert recent billable work into draft invoices.',
+        'Follow up on sent or overdue invoices.',
+        'Review expenses before estimating quarterly taxes.',
+      ],
+    }
+  }
+
+  return {
+    headline: 'This month needs a cashflow pass.',
+    body: 'Review receivables, upcoming bills, and expense capture before moving into deeper accounting work.',
+    highlights: [
+      'Collect or remind on open invoices.',
+      'Capture missing vendor bills and expenses.',
+      'Use Tax Prep once income and expenses look complete.',
+    ],
+  }
 }
 
 function getPersonalNextSteps(bills: Bill[], expenses: Expense[]): AiNextStep[] {
@@ -413,6 +497,10 @@ export default function DashboardPage() {
       ? getPersonalNextSteps(personalBills, personalExpenses)
       : getSampleNextSteps(accountType)
   const monthlyCloseChecklist = getMonthlyCloseChecklist(accountType, personalBills, personalExpenses)
+  const monthlySummary =
+    accountType === AccountType.personal
+      ? getPersonalMonthlySummary(personalBills, personalExpenses)
+      : getSampleMonthlySummary(accountType)
 
   const unpaidBills = personalBills.filter(
     bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
@@ -470,6 +558,31 @@ export default function DashboardPage() {
                 <p className="mt-1 text-sm text-muted-foreground">{step.detail}</p>
               </button>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Monthly Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+            <div className="rounded-lg bg-muted/50 p-4">
+              <p className="text-sm font-semibold">{monthlySummary.headline}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{monthlySummary.body}</p>
+            </div>
+            <div className="space-y-2">
+              {monthlySummary.highlights.map((highlight) => (
+                <div key={highlight} className="flex items-start gap-2 text-sm">
+                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                  <span className="text-muted-foreground">{highlight}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>
