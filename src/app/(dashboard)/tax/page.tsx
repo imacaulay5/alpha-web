@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAppState } from '@/contexts/AppStateContext'
+import { getExpenses } from '@/services/expenses.service'
+import { getInvoices } from '@/services/invoices.service'
 import {
   getTaxFilings,
   createTaxFiling,
@@ -11,10 +13,11 @@ import {
   markTaxFilingFiled,
   seedQuarterlyEstimates,
 } from '@/services/tax.service'
-import type { TaxFiling } from '@/types/models'
+import type { Expense, Invoice, TaxFiling } from '@/types/models'
 import {
   AccountType,
   Capability,
+  InvoiceStatus,
   TaxFilingStatus,
   taxFilingStatusLabels,
 } from '@/types/enums'
@@ -77,6 +80,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO, differenceInDays, isPast, isWithinInterval, addDays } from 'date-fns'
+import { useRouter } from 'next/navigation'
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -152,6 +156,15 @@ type TaxReadinessItem = {
   tone: 'ready' | 'watch' | 'action'
 }
 
+type TaxPrepReminder = {
+  id: string
+  title: string
+  detail: string
+  href: string
+  badge: string
+  tone: 'action' | 'watch' | 'ready'
+}
+
 // ─── Quarter Cards ────────────────────────────────────────────
 
 interface QuarterInfo {
@@ -173,6 +186,7 @@ function getQuarters(year: number): QuarterInfo[] {
 // ─── Main Page ────────────────────────────────────────────────
 
 export default function TaxPage() {
+  const router = useRouter()
   const { user } = useAuth()
   const { hasCapability } = useAppState()
 
@@ -182,6 +196,8 @@ export default function TaxPage() {
   const canTrackSalesTax = hasCapability(Capability.trackSalesTax)
 
   const [filings, setFilings] = useState<TaxFiling[]>([])
+  const [taxExpenses, setTaxExpenses] = useState<Expense[]>([])
+  const [taxInvoices, setTaxInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [seeding, setSeeding] = useState(false)
@@ -212,8 +228,19 @@ export default function TaxPage() {
   const loadData = async () => {
     try {
       setError(null)
-      const data = await getTaxFilings()
-      setFilings(data)
+      const yearStart = `${CURRENT_YEAR}-01-01`
+      const yearEnd = `${CURRENT_YEAR}-12-31`
+      const [filingsData, expensesData, invoicesData] = await Promise.all([
+        getTaxFilings(),
+        getExpenses({ startDate: yearStart, endDate: yearEnd }),
+        getInvoices({
+          userId: user?.id,
+          organizationId: user?.organization_id,
+        }),
+      ])
+      setFilings(filingsData)
+      setTaxExpenses(expensesData)
+      setTaxInvoices(invoicesData)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load data'
       setError(msg)
@@ -354,6 +381,16 @@ export default function TaxPage() {
   const totalTax = federalTax + seTax
   const quarterlyPayment = totalTax / 4
   const hasEstimatorInputs = grossIncome.trim() !== '' && expenses.trim() !== ''
+  const uncategorizedTaxExpenses = taxExpenses.filter(expense => !expense.category)
+  const recentTaxExpenses = taxExpenses.filter((expense) => {
+    const expenseDate = parseISO(expense.expense_date)
+    return isWithinInterval(expenseDate, { start: addDays(new Date(), -45), end: new Date() })
+  })
+  const taxIncomeInvoices = taxInvoices.filter(invoice => (
+    invoice.status === InvoiceStatus.sent ||
+    invoice.status === InvoiceStatus.paid ||
+    invoice.status === InvoiceStatus.overdue
+  ))
 
   const taxReadinessItems: TaxReadinessItem[] = [
     {
@@ -399,6 +436,52 @@ export default function TaxPage() {
       tone: filings.length > 0 && overdueFiled.length === 0 ? 'ready' : 'watch',
     } satisfies TaxReadinessItem] : []),
   ]
+
+  const taxPrepReminders: TaxPrepReminder[] = [
+    ...(uncategorizedTaxExpenses.length > 0 ? [{
+      id: 'categorize-expenses',
+      title: `${uncategorizedTaxExpenses.length} expense${uncategorizedTaxExpenses.length === 1 ? '' : 's'} need categories`,
+      detail: 'Categorize them before export so deductible spending does not turn into a cleanup project.',
+      href: '/expenses',
+      badge: 'Action',
+      tone: 'action',
+    } satisfies TaxPrepReminder] : []),
+    ...(taxExpenses.length === 0 ? [{
+      id: 'missing-expenses',
+      title: 'No expense records found for this tax year',
+      detail: 'Add spending as it happens so Tax Prep has something useful to summarize.',
+      href: '/expenses',
+      badge: 'Start',
+      tone: 'watch',
+    } satisfies TaxPrepReminder] : []),
+    ...(taxExpenses.length > 0 && recentTaxExpenses.length === 0 ? [{
+      id: 'stale-expenses',
+      title: 'Expense records look stale',
+      detail: 'No expenses have been added in the last 45 days. Capture recent spending before estimating taxes.',
+      href: '/expenses',
+      badge: 'Review',
+      tone: 'watch',
+    } satisfies TaxPrepReminder] : []),
+    ...(accountType !== AccountType.personal && taxIncomeInvoices.length === 0 ? [{
+      id: 'missing-income',
+      title: 'No invoice income is ready for tax prep',
+      detail: 'Send, mark paid, or review invoices so income does not stay disconnected from estimates.',
+      href: '/invoices',
+      badge: 'Review',
+      tone: 'watch',
+    } satisfies TaxPrepReminder] : []),
+  ]
+
+  const visibleTaxPrepReminders = taxPrepReminders.length > 0
+    ? taxPrepReminders
+    : [{
+        id: 'tax-ready',
+        title: 'Tax prep records look current',
+        detail: 'Expenses, income records, and filing deadlines are ready for a closer review.',
+        href: '/tax',
+        badge: 'Ready',
+        tone: 'ready',
+      } satisfies TaxPrepReminder]
 
   if (loading) {
     return (
@@ -527,6 +610,46 @@ export default function TaxPage() {
                   </div>
                   <p className="text-sm text-muted-foreground">{item.detail}</p>
                 </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Receipt className="w-4 h-4" />
+            Tax Prep Reminders
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Alpha checks for missing or stale records that can make tax prep harder later.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {visibleTaxPrepReminders.map((reminder) => (
+              <div key={reminder.id} className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium">{reminder.title}</p>
+                    <Badge variant={reminder.tone === 'action' ? 'destructive' : reminder.tone === 'ready' ? 'default' : 'secondary'}>
+                      {reminder.badge}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{reminder.detail}</p>
+                </div>
+                {reminder.href !== '/tax' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(reminder.href)}
+                    className="shrink-0"
+                  >
+                    Review
+                  </Button>
+                )}
               </div>
             ))}
           </div>
