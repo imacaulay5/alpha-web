@@ -146,10 +146,18 @@ export async function createPayrollRun(
   employees: Employee[]
 ): Promise<PayrollRun> {
   const supabase = getSupabaseClient()
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+
+  if (userError || !userData.user) {
+    throw new Error(userError?.message || 'You must be signed in to create payroll runs')
+  }
 
   const { data: run, error: runError } = await supabase
     .from('payroll_runs')
-    .insert(input)
+    .insert({
+      ...input,
+      user_id: userData.user.id,
+    })
     .select()
     .single()
 

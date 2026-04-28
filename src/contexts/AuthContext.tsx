@@ -352,10 +352,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: 'Not authenticated' }
     }
 
-    const { error } = await supabase
-      .from('users')
-      .update({ account_type: accountType })
-      .eq('id', state.supabaseUser.id)
+    const { error } = await supabase.rpc('set_own_account_type', {
+      account_type_param: accountType,
+    })
 
     if (error) {
       return { error: error.message }

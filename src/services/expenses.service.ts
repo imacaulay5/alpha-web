@@ -88,19 +88,44 @@ export async function deleteExpense(id: string): Promise<void> {
 // Upload receipt
 export async function uploadReceipt(file: File): Promise<string> {
   const supabase = getSupabaseClient()
-  const fileExt = file.name.split('.').pop()
-  const fileName = `${Date.now()}.${fileExt}`
-  const filePath = `receipts/${fileName}`
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
+  const maxBytes = 10 * 1024 * 1024
+
+  if (!allowedTypes.has(file.type)) {
+    throw new Error('Receipt must be a JPEG, PNG, WebP, or PDF file')
+  }
+
+  if (file.size > maxBytes) {
+    throw new Error('Receipt must be smaller than 10 MB')
+  }
+
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError || !userData.user) {
+    throw new Error(userError?.message || 'You must be signed in to upload receipts')
+  }
+
+  const extensionByType: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'application/pdf': 'pdf',
+  }
+  const filePath = `${userData.user.id}/${crypto.randomUUID()}.${extensionByType[file.type]}`
 
   const { error } = await supabase.storage
     .from('receipts')
-    .upload(filePath, file)
+    .upload(filePath, file, {
+      contentType: file.type,
+      upsert: false,
+    })
 
   if (error) throw error
 
-  const { data } = supabase.storage
+  const { data, error: signedUrlError } = await supabase.storage
     .from('receipts')
-    .getPublicUrl(filePath)
+    .createSignedUrl(filePath, 60 * 60 * 24 * 7)
 
-  return data.publicUrl
+  if (signedUrlError) throw signedUrlError
+
+  return data.signedUrl
 }
