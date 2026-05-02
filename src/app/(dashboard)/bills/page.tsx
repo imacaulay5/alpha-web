@@ -255,7 +255,7 @@ function PersonalBillsView() {
     : [{
         id: 'clean',
         title: 'No bill reminders need attention',
-        detail: 'Alpha will surface overdue and upcoming bills here as due dates get close.',
+        detail: 'Amountly will surface overdue and upcoming bills here as due dates get close.',
         amount: 0,
         badge: 'Ready',
         tone: 'ready' as const,
@@ -289,7 +289,7 @@ function PersonalBillsView() {
                 Smart Bill Reminders
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Alpha watches due dates and brings the next bill actions forward.
+                Amountly watches due dates and brings the next bill actions forward.
               </p>
             </div>
             <Button
@@ -679,7 +679,7 @@ function AccountsPayableView() {
                 Smart Bill Reminders
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Alpha highlights overdue and upcoming vendor bills before they surprise cash flow.
+                Amountly highlights overdue and upcoming vendor bills before they surprise cash flow.
               </p>
             </div>
             {canManageBills && <Button type="button" variant="outline" size="sm" onClick={openCreateBill} className="shrink-0">New Bill</Button>}
@@ -881,7 +881,7 @@ function AccountsPayableView() {
                       <div>
                         <p className="text-sm font-medium">Smart bill line</p>
                         <p className="text-sm text-muted-foreground">
-                          Describe the vendor charge and Alpha will add an item.
+                          Describe the vendor charge and Amountly will add an item.
                         </p>
                       </div>
                     </div>
@@ -898,7 +898,7 @@ function AccountsPayableView() {
                       />
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-xs text-muted-foreground">
-                          {billLineCaptureSummary || 'Alpha looks for description, quantity, and rate.'}
+                          {billLineCaptureSummary || 'Amountly looks for description, quantity, and rate.'}
                         </p>
                         <Button
                           type="button"

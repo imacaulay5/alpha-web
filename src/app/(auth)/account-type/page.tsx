@@ -76,7 +76,7 @@ export default function AccountTypeSelectionPage() {
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold">Choose your account type</h1>
         <p className="text-muted-foreground mt-2">
-          Select the option that best describes how you&apos;ll use Alpha
+          Select the option that best describes how you&apos;ll use Amountly
         </p>
       </div>
 

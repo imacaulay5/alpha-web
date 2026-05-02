@@ -1,7 +1,7 @@
 
-# Alpha
+# Amountly
 
-Alpha is an AI-assisted accounting workspace for people who want clear financial next steps without needing to think like an accountant.
+Amountly is an AI-assisted accounting workspace for people who want clear financial next steps without needing to think like an accountant.
 
 The production roadmap is now focused on a V1 loop:
 

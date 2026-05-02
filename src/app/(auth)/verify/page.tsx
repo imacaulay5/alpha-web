@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, MailCheck, RotateCw } from 'lucide-react'
@@ -20,7 +20,7 @@ function getVerificationType(type: string | null): VerificationType {
   return VERIFICATION_TYPES.find((verificationType) => verificationType === type) ?? 'signup'
 }
 
-export default function VerifyPage() {
+function VerifyPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { verifyEmailOtp, resendVerification, isLoading } = useAuth()
@@ -187,5 +187,13 @@ export default function VerifyPage() {
         </p>
       </CardFooter>
     </Card>
+  )
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={<Card className="h-72 w-full max-w-md animate-pulse" />}>
+      <VerifyPageContent />
+    </Suspense>
   )
 }

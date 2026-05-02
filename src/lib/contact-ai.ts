@@ -68,6 +68,6 @@ export function captureContactFromText(text: string): ContactCaptureResult {
     state: cityStateZip?.[2],
     zip_code: cityStateZip?.[3],
     notes: text.trim(),
-    reason: 'Alpha looked for company, contact, email, phone, and address details.',
+    reason: 'Amountly looked for company, contact, email, phone, and address details.',
   }
 }

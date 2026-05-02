@@ -278,14 +278,14 @@ export function InvoicePDF({ invoice, organization }: InvoicePDFProps) {
   return (
     <Document
       title={`Invoice ${invoice.invoice_number}`}
-      author={organization?.name || 'Alpha'}
+      author={organization?.name || 'Amountly'}
     >
       <Page size="A4" style={styles.page}>
 
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.brandName}>{organization?.name || 'Alpha'}</Text>
+            <Text style={styles.brandName}>{organization?.name || 'Amountly'}</Text>
             {organization?.email && <Text style={styles.brandSub}>{organization.email}</Text>}
             {organization?.address && <Text style={styles.brandSub}>{organization.address}</Text>}
             {(organization?.city || organization?.state) && (
@@ -409,7 +409,7 @@ export function InvoicePDF({ invoice, organization }: InvoicePDFProps) {
         {/* Footer */}
         <View style={styles.footer} fixed>
           <Text style={styles.footerText}>
-            {organization?.name || 'Alpha'} · {invoice.invoice_number}
+            {organization?.name || 'Amountly'} · {invoice.invoice_number}
           </Text>
           <Text style={styles.footerText} render={({ pageNumber, totalPages }) =>
             `Page ${pageNumber} of ${totalPages}`

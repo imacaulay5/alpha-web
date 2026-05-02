@@ -397,7 +397,7 @@ export default function TimeEntriesPage() {
                     <div>
                       <p className="text-sm font-medium">Smart time capture</p>
                       <p className="text-sm text-muted-foreground">
-                        Describe the work and Alpha will fill the time entry.
+                        Describe the work and Amountly will fill the time entry.
                       </p>
                     </div>
                   </div>
@@ -414,7 +414,7 @@ export default function TimeEntriesPage() {
                     />
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs text-muted-foreground">
-                        {smartTimeSummary || 'Alpha looks for work notes, dates, durations, and time ranges.'}
+                        {smartTimeSummary || 'Amountly looks for work notes, dates, durations, and time ranges.'}
                       </p>
                       <Button
                         type="button"

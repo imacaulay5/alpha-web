@@ -112,7 +112,7 @@ export function captureTimeEntryFromText(text: string): TimeCaptureResult {
     notes: notes.charAt(0).toUpperCase() + notes.slice(1),
     duration_minutes: durationMinutes,
     reason: range
-      ? 'Alpha found a start and end time in your note.'
-      : 'Alpha found a duration and estimated the time block.',
+      ? 'Amountly found a start and end time in your note.'
+      : 'Amountly found a duration and estimated the time block.',
   }
 }

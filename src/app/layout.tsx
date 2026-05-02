@@ -6,7 +6,7 @@ import { Providers } from '@/components/providers'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Alpha',
+  title: 'Amountly',
   description: 'AI-assisted accounting for bills, expenses, invoices, and financial next steps',
 }
 

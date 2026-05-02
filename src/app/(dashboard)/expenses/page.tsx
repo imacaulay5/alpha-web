@@ -446,7 +446,7 @@ export default function ExpensesPage() {
                     <div>
                       <p className="text-sm font-medium">Smart capture</p>
                       <p className="text-sm text-muted-foreground">
-                        Paste a receipt line or describe the expense and Alpha will prefill what it can.
+                        Paste a receipt line or describe the expense and Amountly will prefill what it can.
                       </p>
                     </div>
                   </div>
@@ -462,7 +462,7 @@ export default function ExpensesPage() {
                     />
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs text-muted-foreground">
-                        {smartCaptureSummary || 'Alpha looks for amount, merchant, date, and category signals.'}
+                        {smartCaptureSummary || 'Amountly looks for amount, merchant, date, and category signals.'}
                       </p>
                       <Button
                         type="button"
@@ -487,7 +487,7 @@ export default function ExpensesPage() {
                   <div>
                     <p className="text-sm font-medium">Receipt/document extraction</p>
                     <p className="text-sm text-muted-foreground">
-                      Attach a receipt and paste receipt text or OCR output for Alpha to extract the fields.
+                      Attach a receipt and paste receipt text or OCR output for Amountly to extract the fields.
                     </p>
                   </div>
                 </div>
@@ -515,7 +515,7 @@ export default function ExpensesPage() {
                   />
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-xs text-muted-foreground">
-                      {receiptSummary || 'Alpha looks for merchant, date, total, and category signals.'}
+                      {receiptSummary || 'Amountly looks for merchant, date, total, and category signals.'}
                     </p>
                     <Button
                       type="button"
@@ -620,7 +620,7 @@ export default function ExpensesPage() {
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-medium">
-                            Alpha suggests {getExpenseCategorySuggestionLabel(categorySuggestion)}
+                            Amountly suggests {getExpenseCategorySuggestionLabel(categorySuggestion)}
                           </p>
                           <Badge variant="outline">{categorySuggestion.confidence} confidence</Badge>
                         </div>

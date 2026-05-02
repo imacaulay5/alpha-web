@@ -177,7 +177,7 @@ export function suggestExpenseCategory(input: {
     return {
       category: ExpenseCategory.other,
       confidence: 'low',
-      reason: 'Add a merchant or description and Alpha can suggest a better category.',
+      reason: 'Add a merchant or description and Amountly can suggest a better category.',
     }
   }
 
@@ -324,7 +324,7 @@ export function captureExpenseFromText(text: string): ExpenseSmartCaptureResult 
     category: suggestion.category,
     confidence: suggestion.confidence,
     reason: amount
-      ? `${suggestion.reason} Alpha also found an amount in your note.`
+      ? `${suggestion.reason} Amountly also found an amount in your note.`
       : suggestion.reason,
   }
 }

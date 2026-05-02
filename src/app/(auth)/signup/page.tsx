@@ -62,7 +62,7 @@ export default function SignUpPage() {
       <CardHeader className="space-y-1">
         <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
         <CardDescription>
-          Enter your details to get started with Alpha
+          Enter your details to get started with Amountly
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit(onSubmit)}>

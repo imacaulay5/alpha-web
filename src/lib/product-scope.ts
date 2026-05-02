@@ -9,7 +9,7 @@ export const deferredModuleDetails: Record<DeferredModuleKey, {
 }> = {
   accounting: {
     title: 'Full accounting is deferred',
-    description: 'Journal entries, chart of accounts, and reconciliation are powerful, but they make Alpha feel like traditional accounting software before the core workflow is finished.',
+    description: 'Journal entries, chart of accounts, and reconciliation are powerful, but they make Amountly feel like traditional accounting software before the core workflow is finished.',
     focus: ['Dashboard next steps', 'Bills and expenses', 'Tax Prep exports'],
   },
   payroll: {
@@ -19,7 +19,7 @@ export const deferredModuleDetails: Record<DeferredModuleKey, {
   },
   inventory: {
     title: 'Inventory is deferred',
-    description: 'Inventory management is useful for product businesses, but it broadens Alpha beyond simple accounting for the first production version.',
+    description: 'Inventory management is useful for product businesses, but it broadens Amountly beyond simple accounting for the first production version.',
     focus: ['Expense capture', 'Vendor bills', 'Tax-ready categories'],
   },
   team: {

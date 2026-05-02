@@ -61,8 +61,8 @@ export function draftInvoiceReminder(invoice: Invoice): InvoiceReminderDraft {
       'Thank you,',
     ].join('\n'),
     reason: isOverdue
-      ? 'This invoice is overdue, so Alpha drafted a firmer but still polite follow-up.'
-      : 'This invoice is still open, so Alpha drafted a friendly payment reminder.',
+      ? 'This invoice is overdue, so Amountly drafted a firmer but still polite follow-up.'
+      : 'This invoice is still open, so Amountly drafted a friendly payment reminder.',
   }
 }
 
@@ -103,10 +103,10 @@ export function captureInvoiceLineFromText(text: string): InvoiceLineCaptureResu
     rate,
     amount: quantity * rate,
     reason: rateMatch
-      ? 'Alpha found a quantity and rate in your note.'
+      ? 'Amountly found a quantity and rate in your note.'
       : flatAmountMatch
-        ? 'Alpha found a flat amount and treated it as one line item.'
-        : 'Alpha found a description. Add a rate if the amount is missing.',
+        ? 'Amountly found a flat amount and treated it as one line item.'
+        : 'Amountly found a description. Add a rate if the amount is missing.',
   }
 }
 
@@ -159,7 +159,7 @@ export function draftInvoiceLinesFromTimeEntries(entries: TimeEntry[], fallbackR
       quantity,
       rate,
       amount: quantity * rate,
-      reason: 'Alpha turned an unbilled time entry into an invoice line.',
+      reason: 'Amountly turned an unbilled time entry into an invoice line.',
     }
   })
 
@@ -169,7 +169,7 @@ export function draftInvoiceLinesFromTimeEntries(entries: TimeEntry[], fallbackR
   return {
     lineItems,
     summary: lineItems.length > 0
-      ? `Alpha found ${totalHours.toFixed(2)} unbilled hours worth ${formatCurrency(totalAmount)}.`
+      ? `Amountly found ${totalHours.toFixed(2)} unbilled hours worth ${formatCurrency(totalAmount)}.`
       : 'No unbilled time entries are ready to invoice.',
     clientId: clientIds.length === 1 ? clientIds[0] : undefined,
   }

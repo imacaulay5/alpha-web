@@ -206,7 +206,7 @@ function getPersonalMonthlySummary(bills: Bill[], expenses: Expense[]): MonthlyS
   if (expensesThisMonth.length === 0 && paidBillsThisMonth.length === 0 && unpaidBills.length === 0) {
     return {
       headline: 'No money movement tracked yet this month.',
-      body: 'Add bills and expenses as they happen and Alpha will turn them into a month-end summary.',
+      body: 'Add bills and expenses as they happen and Amountly will turn them into a month-end summary.',
       highlights: [
         'Start with one recent expense.',
         'Add upcoming bills before their due dates.',
@@ -312,7 +312,7 @@ function getPersonalNextSteps(bills: Bill[], expenses: Expense[]): AiNextStep[] 
     nextSteps.push({
       id: 'clean-month',
       title: 'Your records look current',
-      detail: 'Add new bills or expenses as they come in and Alpha will surface what needs attention.',
+      detail: 'Add new bills or expenses as they come in and Amountly will surface what needs attention.',
       href: '/expenses',
       priority: 'low',
     })
@@ -747,7 +747,7 @@ export default function DashboardPage() {
     accountType === AccountType.personal
       ? getRecentPersonalActivity(personalBills, personalExpenses)
       : [
-          { id: 'time-1', message: 'Logged 4 hours on Project Alpha', time: '2 mins ago', status: 'success' as const },
+          { id: 'time-1', message: 'Logged 4 hours on Project Meridian', time: '2 mins ago', status: 'success' as const },
           { id: 'invoice-1', message: 'Invoice #INV-042 sent to Acme Corp', time: '1 hour ago', status: 'success' as const },
           { id: 'expense-1', message: 'Expense report pending approval', time: '3 hours ago', status: 'warning' as const },
           { id: 'project-1', message: 'New project created: Website Redesign', time: '1 day ago', status: 'success' as const },
@@ -807,7 +807,7 @@ export default function DashboardPage() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Wand2 className="h-5 w-5 text-primary" />
-            Alpha Next Steps
+            Amountly Next Steps
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -1154,7 +1154,7 @@ export default function DashboardPage() {
                 </div>
                 <p className="text-sm text-muted-foreground">{activeCloseStep.detail}</p>
                 <div className="mt-5 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
-                  Finish this step in its workspace, then return to the dashboard. Alpha will refresh the close status from your records.
+                  Finish this step in its workspace, then return to the dashboard. Amountly will refresh the close status from your records.
                 </div>
               </div>
             </div>

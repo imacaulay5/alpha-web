@@ -705,7 +705,7 @@ export default function InvoicesPage() {
                         <div>
                           <p className="text-sm font-medium">Smart line capture</p>
                           <p className="text-sm text-muted-foreground">
-                            Describe the work and Alpha will add an invoice line.
+                            Describe the work and Amountly will add an invoice line.
                           </p>
                         </div>
                       </div>
@@ -722,7 +722,7 @@ export default function InvoicesPage() {
                         />
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <p className="text-xs text-muted-foreground">
-                            {lineCaptureSummary || 'Alpha looks for description, hours, and rate.'}
+                            {lineCaptureSummary || 'Amountly looks for description, hours, and rate.'}
                           </p>
                           <Button
                             type="button"
@@ -890,7 +890,7 @@ export default function InvoicesPage() {
               Payment Reminder Draft
             </DialogTitle>
             <DialogDescription>
-              Review and edit this message before sending it outside Alpha.
+              Review and edit this message before sending it outside Amountly.
             </DialogDescription>
           </DialogHeader>
           {reminderDraft && reminderInvoice && (

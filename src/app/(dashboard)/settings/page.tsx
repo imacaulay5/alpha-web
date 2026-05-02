@@ -315,19 +315,19 @@ export default function SettingsPage() {
 
   // Export items gated by capability
   const exportItems = [
-    { key: 'invoices', label: 'Invoices', file: 'alpha-invoices.csv', cap: Capability.viewInvoices },
-    { key: 'invoice_line_items', label: 'Invoice Line Items', file: 'alpha-invoice-lines.csv', cap: Capability.viewInvoices },
-    { key: 'expenses', label: 'Expenses', file: 'alpha-expenses.csv', cap: Capability.viewOwnExpenses },
-    { key: 'bills', label: 'Bills', file: 'alpha-bills.csv', cap: Capability.viewBills },
-    { key: 'clients', label: 'Clients', file: 'alpha-clients.csv', cap: Capability.viewClients },
-    { key: 'projects', label: 'Projects', file: 'alpha-projects.csv', cap: Capability.viewProjects },
-    { key: 'time_entries', label: 'Time Entries', file: 'alpha-time-entries.csv', cap: Capability.viewOwnTimeEntries },
-    { key: 'tax_filings', label: 'Tax Filings', file: 'alpha-tax-filings.csv', cap: Capability.viewTaxDashboard },
-    { key: 'vendors', label: 'Vendors', file: 'alpha-vendors.csv', cap: Capability.manageVendors },
-    { key: 'vendor_bills', label: 'Vendor Bills', file: 'alpha-vendor-bills.csv', cap: Capability.viewAccountsPayable },
-    { key: 'purchase_orders', label: 'Purchase Orders', file: 'alpha-purchase-orders.csv', cap: Capability.createPurchaseOrders },
-    { key: 'employees', label: 'Employees', file: 'alpha-employees.csv', cap: Capability.viewPayroll },
-    { key: 'inventory_items', label: 'Inventory Items', file: 'alpha-inventory.csv', cap: Capability.viewInventory },
+    { key: 'invoices', label: 'Invoices', file: 'amountly-invoices.csv', cap: Capability.viewInvoices },
+    { key: 'invoice_line_items', label: 'Invoice Line Items', file: 'amountly-invoice-lines.csv', cap: Capability.viewInvoices },
+    { key: 'expenses', label: 'Expenses', file: 'amountly-expenses.csv', cap: Capability.viewOwnExpenses },
+    { key: 'bills', label: 'Bills', file: 'amountly-bills.csv', cap: Capability.viewBills },
+    { key: 'clients', label: 'Clients', file: 'amountly-clients.csv', cap: Capability.viewClients },
+    { key: 'projects', label: 'Projects', file: 'amountly-projects.csv', cap: Capability.viewProjects },
+    { key: 'time_entries', label: 'Time Entries', file: 'amountly-time-entries.csv', cap: Capability.viewOwnTimeEntries },
+    { key: 'tax_filings', label: 'Tax Filings', file: 'amountly-tax-filings.csv', cap: Capability.viewTaxDashboard },
+    { key: 'vendors', label: 'Vendors', file: 'amountly-vendors.csv', cap: Capability.manageVendors },
+    { key: 'vendor_bills', label: 'Vendor Bills', file: 'amountly-vendor-bills.csv', cap: Capability.viewAccountsPayable },
+    { key: 'purchase_orders', label: 'Purchase Orders', file: 'amountly-purchase-orders.csv', cap: Capability.createPurchaseOrders },
+    { key: 'employees', label: 'Employees', file: 'amountly-employees.csv', cap: Capability.viewPayroll },
+    { key: 'inventory_items', label: 'Inventory Items', file: 'amountly-inventory.csv', cap: Capability.viewInventory },
   ].filter((item) => hasCapability(item.cap))
 
   const notifOptions: {

@@ -392,7 +392,7 @@ export default function TaxPage() {
       return
     }
 
-    downloadTaxPacketCsv(taxPacketRows, `alpha-tax-packet-${CURRENT_YEAR}.csv`)
+    downloadTaxPacketCsv(taxPacketRows, `amountly-tax-packet-${CURRENT_YEAR}.csv`)
     toast.success('Tax packet downloaded')
   }
 
@@ -657,7 +657,7 @@ export default function TaxPage() {
             <div>
               <CardTitle className="text-base flex items-center gap-2">
                 <Wand2 className="w-4 h-4" />
-                Alpha Tax Readiness
+                Amountly Tax Readiness
               </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 A plain-English check before you estimate, pay, or export. Estimates are planning aids, not tax advice.
@@ -705,7 +705,7 @@ export default function TaxPage() {
             Tax Prep Reminders
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Alpha checks for missing or stale records that can make tax prep harder later.
+            Amountly checks for missing or stale records that can make tax prep harder later.
           </p>
         </CardHeader>
         <CardContent>
@@ -748,7 +748,7 @@ export default function TaxPage() {
                   Tax Export Packet
                 </CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Review the records Alpha will include before downloading a CSV for your tax workspace.
+                  Review the records Amountly will include before downloading a CSV for your tax workspace.
                 </p>
               </div>
               <Button
@@ -1406,7 +1406,7 @@ export default function TaxPage() {
               ) : (
                 <div className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
                   <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-                  <span>No export blockers detected by Alpha.</span>
+                  <span>No export blockers detected by Amountly.</span>
                 </div>
               )}
             </div>

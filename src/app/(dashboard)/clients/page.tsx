@@ -335,7 +335,7 @@ export default function ClientsPage() {
                     <div>
                       <p className="text-sm font-medium">Smart contact capture</p>
                       <p className="text-sm text-muted-foreground">
-                        Paste a client signature or contact block and Alpha will fill what it can.
+                        Paste a client signature or contact block and Amountly will fill what it can.
                       </p>
                     </div>
                   </div>
@@ -352,7 +352,7 @@ export default function ClientsPage() {
                     />
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-xs text-muted-foreground">
-                        {smartContactSummary || 'Alpha looks for company, contact, email, phone, and address.'}
+                        {smartContactSummary || 'Amountly looks for company, contact, email, phone, and address.'}
                       </p>
                       <Button
                         type="button"
