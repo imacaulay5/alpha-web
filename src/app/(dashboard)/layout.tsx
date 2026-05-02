@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTheme } from 'next-themes'
 import { FloatingActionButton } from '@/components/FloatingActionButton'
+import { AmountlyLogo } from '@/components/AmountlyLogo'
 import { accountTypeLabels } from '@/types/enums'
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -136,9 +137,7 @@ export default function DashboardLayout({
       >
         <div className="w-64 flex flex-col h-full">
           <div className="flex items-center gap-2 px-4 py-4 border-b">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-              A
-            </div>
+            <AmountlyLogo className="h-8 w-8" />
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-semibold">Amountly</span>
               <span className="truncate text-xs text-muted-foreground">
