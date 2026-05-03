@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Loader2,
   PanelLeft,
+  Search,
   CreditCard,
   BookOpen,
   Calculator,
@@ -27,6 +28,7 @@ import {
   Package,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -68,6 +70,7 @@ export default function DashboardLayout({
   const { visibleTabs, organization } = useAppState()
   const { theme, setTheme } = useTheme()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [dashboardSearchQuery, setDashboardSearchQuery] = useState('')
 
   useEffect(() => {
     if (isLoading) {
@@ -125,6 +128,13 @@ export default function DashboardLayout({
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark')
   }
+
+  const handleDashboardSearchChange = (value: string) => {
+    setDashboardSearchQuery(value)
+    window.dispatchEvent(new CustomEvent('amountly-dashboard-search', { detail: value }))
+  }
+
+  const showDashboardSearch = pathname === '/dashboard'
 
   return (
     <div className="flex h-screen w-full">
@@ -192,7 +202,7 @@ export default function DashboardLayout({
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
-          <div className="flex h-full items-center px-4">
+          <div className="flex h-full items-center gap-4 px-4">
             <Button
               variant="ghost"
               size="icon"
@@ -202,6 +212,17 @@ export default function DashboardLayout({
               <PanelLeft className="h-4 w-4" />
               <span className="sr-only">Toggle Sidebar</span>
             </Button>
+            {showDashboardSearch ? (
+              <div className="relative hidden w-full max-w-2xl md:block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={dashboardSearchQuery}
+                  onChange={(event) => handleDashboardSearchChange(event.target.value)}
+                  placeholder="Search overdue bills, tax expenses, receipts, invoices..."
+                  className="h-9 bg-muted/40 pl-9"
+                />
+              </div>
+            ) : null}
             <div className="flex-1" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

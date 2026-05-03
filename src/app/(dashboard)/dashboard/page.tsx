@@ -5,12 +5,14 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useAppState } from '@/contexts/AppStateContext'
 import { getBills } from '@/services/bills.service'
 import { getExpenses } from '@/services/expenses.service'
-import type { Bill, Expense } from '@/types/models'
-import { AccountType, BillStatus, Capability, ExpenseCategory, ExpenseStatus, expenseCategoryLabels } from '@/types/enums'
+import { getInvoices } from '@/services/invoices.service'
+import { getTimeEntries } from '@/services/time-entries.service'
+import { getVendorBills } from '@/services/accounts-payable.service'
+import type { Bill, Expense, Invoice, TimeEntry, VendorBill } from '@/types/models'
+import { AccountType, BillStatus, Capability, ExpenseCategory, ExpenseStatus, InvoiceStatus, expenseCategoryLabels } from '@/types/enums'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -27,7 +29,6 @@ import {
   Clock,
   FileText,
   Receipt,
-  FolderKanban,
   CheckCircle,
   AlertCircle,
   CreditCard,
@@ -86,8 +87,21 @@ type FinancialSearchResult = {
   priority: AiNextStep['priority']
 }
 
+type WorkDashboardData = {
+  invoices: Invoice[]
+  expenses: Expense[]
+  timeEntries: TimeEntry[]
+  vendorBills: VendorBill[]
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
+}
+
+function formatHours(minutes: number) {
+  const hours = minutes / 60
+  if (hours === 0) return '0h'
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: hours < 10 ? 1 : 0 }).format(hours)}h`
 }
 
 function normalizeSearchText(value: string) {
@@ -149,6 +163,109 @@ function getPersonalStats(bills: Bill[], expenses: Expense[]): DashboardStat[] {
       change: `${expensesThisMonth.length} expenses`,
       trend: expensesThisMonth.length > 0 ? 'up' : 'down',
       icon: Receipt,
+    },
+  ]
+}
+
+function getWorkStats(accountType: AccountType, data: WorkDashboardData): DashboardStat[] {
+  const now = new Date()
+  const monthStart = startOfMonth(now)
+  const monthEnd = endOfMonth(now)
+
+  const paidInvoicesThisMonth = data.invoices.filter((invoice) => {
+    if (invoice.status !== InvoiceStatus.paid || !invoice.paid_at) return false
+    const paidAt = parseISO(invoice.paid_at)
+    return !isBefore(paidAt, monthStart) && !isAfter(paidAt, monthEnd)
+  })
+  const openInvoices = data.invoices.filter((invoice) =>
+    invoice.status === InvoiceStatus.sent || invoice.status === InvoiceStatus.overdue
+  )
+  const expensesThisMonth = data.expenses.filter((expense) => {
+    const expenseDate = parseISO(expense.expense_date)
+    return !isBefore(expenseDate, monthStart) && !isAfter(expenseDate, monthEnd)
+  })
+  const openVendorBills = data.vendorBills.filter(
+    bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
+  )
+  const timeEntriesThisMonth = data.timeEntries.filter((entry) => {
+    const startedAt = parseISO(entry.start_at)
+    return !isBefore(startedAt, monthStart) && !isAfter(startedAt, monthEnd)
+  })
+  const totalMinutes = timeEntriesThisMonth.reduce((sum, entry) => {
+    if (typeof entry.duration_minutes === 'number') return sum + entry.duration_minutes
+    if (entry.end_at) {
+      const start = parseISO(entry.start_at)
+      const end = parseISO(entry.end_at)
+      return sum + Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000))
+    }
+    return sum
+  }, 0)
+  const revenueTotal = paidInvoicesThisMonth.reduce((sum, invoice) => sum + invoice.total, 0)
+  const openInvoiceTotal = openInvoices.reduce((sum, invoice) => sum + invoice.total, 0)
+  const expenseTotal = expensesThisMonth.reduce((sum, expense) => sum + expense.amount, 0)
+  const vendorBillTotal = openVendorBills.reduce((sum, bill) => sum + bill.total, 0)
+
+  if (accountType === AccountType.freelancer) {
+    return [
+      {
+        title: 'Billable Hours',
+        value: formatHours(totalMinutes),
+        change: `${timeEntriesThisMonth.length} entries this month`,
+        trend: totalMinutes > 0 ? 'up' : 'down',
+        icon: Clock,
+      },
+      {
+        title: 'Revenue MTD',
+        value: formatCurrency(revenueTotal),
+        change: `${paidInvoicesThisMonth.length} paid invoices`,
+        trend: revenueTotal > 0 ? 'up' : 'down',
+        icon: DollarSign,
+      },
+      {
+        title: 'Outstanding',
+        value: formatCurrency(openInvoiceTotal),
+        change: `${openInvoices.length} open invoices`,
+        trend: openInvoices.length > 0 ? 'up' : 'down',
+        icon: FileText,
+      },
+      {
+        title: 'Expenses MTD',
+        value: formatCurrency(expenseTotal),
+        change: `${expensesThisMonth.length} expense records`,
+        trend: expenseTotal > 0 ? 'up' : 'down',
+        icon: Receipt,
+      },
+    ]
+  }
+
+  return [
+    {
+      title: 'Revenue MTD',
+      value: formatCurrency(revenueTotal),
+      change: `${paidInvoicesThisMonth.length} paid invoices`,
+      trend: revenueTotal > 0 ? 'up' : 'down',
+      icon: DollarSign,
+    },
+    {
+      title: 'Open Invoices',
+      value: formatCurrency(openInvoiceTotal),
+      change: `${openInvoices.length} sent or overdue`,
+      trend: openInvoices.length > 0 ? 'up' : 'down',
+      icon: FileText,
+    },
+    {
+      title: 'Vendor Bills Due',
+      value: formatCurrency(vendorBillTotal),
+      change: `${openVendorBills.length} unpaid bills`,
+      trend: openVendorBills.length > 0 ? 'up' : 'down',
+      icon: CreditCard,
+    },
+    {
+      title: 'Team Hours',
+      value: formatHours(totalMinutes),
+      change: `${timeEntriesThisMonth.length} entries this month`,
+      trend: totalMinutes > 0 ? 'up' : 'down',
+      icon: Clock,
     },
   ]
 }
@@ -673,28 +790,18 @@ function getMonthlyCloseChecklist(accountType: AccountType, bills: Bill[], expen
   ]
 }
 
-// Freelancer account dashboard stats
-const freelancerStats: DashboardStat[] = [
-  { title: 'Billable Hours', value: '142h', change: '+12.5%', trend: 'up', icon: Clock },
-  { title: 'Revenue MTD', value: '$8,450', change: '+18.3%', trend: 'up', icon: DollarSign },
-  { title: 'Outstanding', value: '$2,340', change: '-8.2%', trend: 'down', icon: FileText },
-  { title: 'Active Projects', value: '5', change: '+1', trend: 'up', icon: FolderKanban },
-]
-
-// Business account dashboard stats
-const businessStats: DashboardStat[] = [
-  { title: 'Revenue MTD', value: '$45,670', change: '+22.5%', trend: 'up', icon: DollarSign },
-  { title: 'Profit Margin', value: '32%', change: '+4.2%', trend: 'up', icon: TrendingUp },
-  { title: 'Team Hours', value: '1,245h', change: '+8.3%', trend: 'up', icon: Clock },
-  { title: 'Pending Approvals', value: '8', change: '-3', trend: 'down', icon: AlertCircle },
-]
-
 export default function DashboardPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { hasCapability } = useAppState()
   const [personalBills, setPersonalBills] = useState<Bill[]>([])
   const [personalExpenses, setPersonalExpenses] = useState<Expense[]>([])
+  const [workDashboardData, setWorkDashboardData] = useState<WorkDashboardData>({
+    invoices: [],
+    expenses: [],
+    timeEntries: [],
+    vendorBills: [],
+  })
   const [personalDashboardError, setPersonalDashboardError] = useState<string | null>(null)
   const [closeGuideOpen, setCloseGuideOpen] = useState(false)
   const [activeCloseStepId, setActiveCloseStepId] = useState<string | null>(null)
@@ -727,14 +834,74 @@ export default function DashboardPage() {
     }
   }, [accountType])
 
+  useEffect(() => {
+    if (accountType === AccountType.personal) return
+
+    let isMounted = true
+
+    const loadWorkDashboard = async () => {
+      const [invoicesResult, expensesResult, timeEntriesResult, vendorBillsResult] = await Promise.allSettled([
+        getInvoices({
+          organizationId: user?.organization_id ?? null,
+          userId: user?.id,
+        }),
+        getExpenses(),
+        getTimeEntries(),
+        getVendorBills(),
+      ])
+
+      if (!isMounted) return
+
+      setWorkDashboardData({
+        invoices: invoicesResult.status === 'fulfilled' ? invoicesResult.value : [],
+        expenses: expensesResult.status === 'fulfilled' ? expensesResult.value : [],
+        timeEntries: timeEntriesResult.status === 'fulfilled' ? timeEntriesResult.value : [],
+        vendorBills: vendorBillsResult.status === 'fulfilled' ? vendorBillsResult.value : [],
+      })
+
+      const failedLoads = [
+        invoicesResult,
+        expensesResult,
+        timeEntriesResult,
+        vendorBillsResult,
+      ].filter((result) => result.status === 'rejected')
+
+      setPersonalDashboardError(
+        failedLoads.length > 0
+          ? 'Some dashboard KPI data could not be loaded.'
+          : null
+      )
+    }
+
+    loadWorkDashboard()
+
+    return () => {
+      isMounted = false
+    }
+  }, [accountType, user?.id, user?.organization_id])
+
+  useEffect(() => {
+    const handleDashboardSearch = (event: Event) => {
+      const query =
+        event instanceof CustomEvent && typeof event.detail === 'string'
+          ? event.detail
+          : ''
+      setFinancialSearchQuery(query)
+    }
+
+    window.addEventListener('amountly-dashboard-search', handleDashboardSearch)
+    return () => {
+      window.removeEventListener('amountly-dashboard-search', handleDashboardSearch)
+    }
+  }, [])
+
   const getStatsForAccountType = (): DashboardStat[] => {
     switch (accountType) {
       case AccountType.personal:
         return getPersonalStats(personalBills, personalExpenses)
       case AccountType.freelancer:
-        return freelancerStats
       case AccountType.business:
-        return businessStats
+        return getWorkStats(accountType, workDashboardData)
       default:
         return getPersonalStats(personalBills, personalExpenses)
     }
@@ -746,12 +913,7 @@ export default function DashboardPage() {
   const recentActivities =
     accountType === AccountType.personal
       ? getRecentPersonalActivity(personalBills, personalExpenses)
-      : [
-          { id: 'time-1', message: 'Logged 4 hours on Project Meridian', time: '2 mins ago', status: 'success' as const },
-          { id: 'invoice-1', message: 'Invoice #INV-042 sent to Acme Corp', time: '1 hour ago', status: 'success' as const },
-          { id: 'expense-1', message: 'Expense report pending approval', time: '3 hours ago', status: 'warning' as const },
-          { id: 'project-1', message: 'New project created: Website Redesign', time: '1 day ago', status: 'success' as const },
-        ]
+      : []
   const aiNextSteps =
     accountType === AccountType.personal
       ? getPersonalNextSteps(personalBills, personalExpenses)
@@ -781,6 +943,15 @@ export default function DashboardPage() {
     return !isBefore(dueDate, new Date()) && !isAfter(dueDate, addDays(new Date(), 7))
   })
   const pendingExpenses = personalExpenses.filter(expense => expense.status === ExpenseStatus.submitted)
+  const openWorkInvoices = workDashboardData.invoices.filter((invoice) =>
+    invoice.status === InvoiceStatus.sent || invoice.status === InvoiceStatus.overdue
+  )
+  const overdueWorkInvoices = workDashboardData.invoices.filter(invoice => invoice.status === InvoiceStatus.overdue)
+  const draftWorkInvoices = workDashboardData.invoices.filter(invoice => invoice.status === InvoiceStatus.draft)
+  const pendingWorkExpenses = workDashboardData.expenses.filter(expense => expense.status === ExpenseStatus.submitted)
+  const openWorkVendorBills = workDashboardData.vendorBills.filter(
+    bill => bill.status !== BillStatus.paid && bill.status !== BillStatus.cancelled
+  )
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -803,54 +974,65 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <Card className="border-primary/20 bg-primary/5">
+      <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <Wand2 className="h-5 w-5 text-primary" />
-            Amountly Next Steps
+            <FileText className="h-5 w-5" />
+            Monthly Summary
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {aiNextSteps.map((step) => (
-              <button
-                key={step.id}
-                onClick={() => router.push(step.href)}
-                className="rounded-lg border bg-background p-4 text-left transition-colors hover:bg-accent"
-              >
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <Badge variant={getPriorityVariant(step.priority)}>
-                    {step.priority}
-                  </Badge>
-                  <Wand2 className="h-4 w-4 text-muted-foreground" />
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-lg bg-muted/50 p-4">
+              <p className="text-sm font-semibold">{monthlySummary.headline}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{monthlySummary.body}</p>
+            </div>
+            <div className="space-y-2">
+              {monthlySummary.highlights.map((highlight) => (
+                <div key={highlight} className="flex items-start gap-2 text-sm">
+                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                  <span className="text-muted-foreground">{highlight}</span>
                 </div>
-                <h2 className="text-sm font-semibold">{step.title}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{step.detail}</p>
-              </button>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <Wand2 className="h-4 w-4 text-muted-foreground" />
+              Next steps
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {aiNextSteps.map((step) => (
+                <button
+                  key={step.id}
+                  onClick={() => router.push(step.href)}
+                  className="rounded-lg border bg-background p-4 text-left transition-colors hover:bg-accent"
+                >
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <Badge variant={getPriorityVariant(step.priority)}>
+                      {step.priority}
+                    </Badge>
+                    <Wand2 className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <h2 className="text-sm font-semibold">{step.title}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{step.detail}</p>
+                </button>
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Financial Search
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={financialSearchQuery}
-              onChange={(event) => setFinancialSearchQuery(event.target.value)}
-              placeholder="Search overdue bills, tax expenses, receipts, invoices..."
-              className="pl-9"
-            />
-          </div>
-
-          {financialSearchQuery.trim() ? (
+      {financialSearchQuery.trim() ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Search className="h-5 w-5" />
+              Search Results
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="grid gap-3 md:grid-cols-2">
               {financialSearchResults.map((result) => (
                 <button
@@ -873,48 +1055,9 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {['overdue bills', 'tax expenses', 'receipts', accountType === AccountType.personal ? 'monthly spending' : 'invoices'].map((suggestion) => (
-                <Button
-                  key={suggestion}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setFinancialSearchQuery(suggestion)}
-                >
-                  {suggestion}
-                </Button>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Monthly Summary
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-            <div className="rounded-lg bg-muted/50 p-4">
-              <p className="text-sm font-semibold">{monthlySummary.headline}</p>
-              <p className="mt-2 text-sm text-muted-foreground">{monthlySummary.body}</p>
-            </div>
-            <div className="space-y-2">
-              {monthlySummary.highlights.map((highlight) => (
-                <div key={highlight} className="flex items-start gap-2 text-sm">
-                  <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
-                  <span className="text-muted-foreground">{highlight}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Quick Actions */}
       <Card>
@@ -949,27 +1092,29 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      <div className={`grid grid-cols-1 md:grid-cols-2 ${stats.length > 2 ? 'lg:grid-cols-4' : ''} gap-6`}>
-        {stats.map((stat, index) => (
-          <Card key={index}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                {stat.trend === 'up' ? (
-                  <TrendingUp className="h-3 w-3 text-green-500" />
-                ) : (
-                  <TrendingDown className="h-3 w-3 text-red-500" />
-                )}
-                {stat.change}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {stats.length > 0 ? (
+        <div className={`grid grid-cols-1 md:grid-cols-2 ${stats.length > 2 ? 'lg:grid-cols-4' : ''} gap-6`}>
+          {stats.map((stat, index) => (
+            <Card key={index}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
+                <stat.icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stat.value}</div>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  {stat.trend === 'up' ? (
+                    <TrendingUp className="h-3 w-3 text-green-500" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 text-red-500" />
+                  )}
+                  {stat.change}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : null}
 
       {/* Recent Activity & Quick Stats */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1051,53 +1196,61 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {hasCapability(Capability.viewBills) && (
+              {accountType === AccountType.personal && hasCapability(Capability.viewBills) && (
                 <>
                   <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                     <span className="text-sm">Overdue Bills</span>
                     <Badge variant="destructive">
-                      {accountType === AccountType.personal ? overdueBills.length : 1}
+                      {overdueBills.length}
                     </Badge>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                     <span className="text-sm">Due This Week</span>
                     <Badge variant="secondary">
-                      {accountType === AccountType.personal ? billsDueThisWeek.length : 3}
+                      {billsDueThisWeek.length}
                     </Badge>
                   </div>
                 </>
               )}
-              {hasCapability(Capability.viewInvoices) && (
-                <>
-                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                    <span className="text-sm">Overdue Invoices</span>
-                    <Badge variant="destructive">2</Badge>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                    <span className="text-sm">Draft Invoices</span>
-                    <Badge variant="secondary">5</Badge>
-                  </div>
-                </>
-              )}
-              {hasCapability(Capability.viewOwnTimeEntries) && (
-                <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                  <span className="text-sm">Hours This Week</span>
-                  <Badge variant="outline">32h</Badge>
-                </div>
-              )}
-              {hasCapability(Capability.viewOwnExpenses) && (
+              {accountType === AccountType.personal && hasCapability(Capability.viewOwnExpenses) && (
                 <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
                   <span className="text-sm">Pending Expenses</span>
                   <Badge variant="secondary">
-                    {accountType === AccountType.personal ? pendingExpenses.length : 3}
+                    {pendingExpenses.length}
                   </Badge>
                 </div>
               )}
-              {accountType === AccountType.business && hasCapability(Capability.viewTeamActivity) && (
-                <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
-                  <span className="text-sm">Team Members</span>
-                  <Badge variant="outline">12</Badge>
-                </div>
+              {accountType !== AccountType.personal && (
+                <>
+                  {hasCapability(Capability.viewInvoices) && (
+                    <>
+                      <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                        <span className="text-sm">Open Invoices</span>
+                        <Badge variant="secondary">{openWorkInvoices.length}</Badge>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                        <span className="text-sm">Overdue Invoices</span>
+                        <Badge variant="destructive">{overdueWorkInvoices.length}</Badge>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                        <span className="text-sm">Draft Invoices</span>
+                        <Badge variant="outline">{draftWorkInvoices.length}</Badge>
+                      </div>
+                    </>
+                  )}
+                  {hasCapability(Capability.viewAccountsPayable) && (
+                    <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                      <span className="text-sm">Vendor Bills Due</span>
+                      <Badge variant="secondary">{openWorkVendorBills.length}</Badge>
+                    </div>
+                  )}
+                  {hasCapability(Capability.viewOwnExpenses) && (
+                    <div className="flex justify-between items-center p-3 bg-muted/50 rounded-lg">
+                      <span className="text-sm">Pending Expenses</span>
+                      <Badge variant="secondary">{pendingWorkExpenses.length}</Badge>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </CardContent>
