@@ -1,6 +1,6 @@
-import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { InvoiceStatus, TimeEntryStatus } from '@/types/enums'
 import type { Invoice, TimeEntry } from '@/types/models'
+import { runAiTask } from '@/lib/ai/client'
 
 export type InvoiceReminderDraft = {
   tone: 'friendly' | 'firm'
@@ -23,115 +23,34 @@ export type TimeInvoiceDraft = {
   clientId?: string
 }
 
-function formatCurrency(value: number, currency = 'USD') {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-  }).format(value)
-}
-
-function getDaysPastDue(invoice: Invoice) {
-  return differenceInCalendarDays(new Date(), parseISO(invoice.due_date))
-}
-
 export function canDraftInvoiceReminder(invoice: Invoice) {
   return invoice.status === InvoiceStatus.sent || invoice.status === InvoiceStatus.overdue
 }
 
-export function draftInvoiceReminder(invoice: Invoice): InvoiceReminderDraft {
-  const clientName = invoice.client?.contact_name || invoice.client?.name || 'there'
-  const amount = formatCurrency(invoice.total, invoice.currency)
-  const daysPastDue = getDaysPastDue(invoice)
-  const isOverdue = invoice.status === InvoiceStatus.overdue || daysPastDue > 0
-  const tone: InvoiceReminderDraft['tone'] = isOverdue ? 'firm' : 'friendly'
-  const dueCopy = isOverdue
-    ? `was due ${Math.max(daysPastDue, 1)} ${Math.max(daysPastDue, 1) === 1 ? 'day' : 'days'} ago`
-    : `is due on ${invoice.due_date}`
-
-  return {
-    tone,
-    subject: `Reminder: invoice ${invoice.invoice_number} for ${amount}`,
-    body: [
-      `Hi ${clientName},`,
-      '',
-      `Just a quick reminder that invoice ${invoice.invoice_number} for ${amount} ${dueCopy}.`,
-      '',
-      'When you have a moment, please let me know if you need anything else from me to process it.',
-      '',
-      'Thank you,',
-    ].join('\n'),
-    reason: isOverdue
-      ? 'This invoice is overdue, so Amountly drafted a firmer but still polite follow-up.'
-      : 'This invoice is still open, so Amountly drafted a friendly payment reminder.',
-  }
+export async function draftInvoiceReminder(invoice: Invoice): Promise<InvoiceReminderDraft> {
+  return runAiTask<InvoiceReminderDraft>('invoice_reminder', {
+    invoice_number: invoice.invoice_number,
+    total: invoice.total,
+    currency: invoice.currency,
+    due_date: invoice.due_date,
+    status: invoice.status,
+    client: {
+      name: invoice.client?.name,
+      contact_name: invoice.client?.contact_name,
+    },
+  })
 }
 
-function cleanLineDescription(text: string) {
-  return text
-    .replace(/\b\d+(?:\.\d+)?\s*(?:hours?|hrs?|x)\b/gi, ' ')
-    .replace(/\b(?:at|@)\s*\$?\d+(?:,\d{3})*(?:\.\d{1,2})?\b/gi, ' ')
-    .replace(/\b\$?\d+(?:,\d{3})*(?:\.\d{1,2})?\s*(?:per|\/)\s*(?:hour|hr)\b/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function titleCaseSentence(value: string) {
-  if (!value) return 'Professional services'
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
-
-export function captureInvoiceLineFromText(text: string): InvoiceLineCaptureResult {
-  const quantityMatch =
-    text.match(/\b(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\b/i) ??
-    text.match(/\b(\d+(?:\.\d+)?)\s*x\b/i)
-  const rateMatch =
-    text.match(/\b(?:at|@)\s*\$?(\d+(?:,\d{3})*(?:\.\d{1,2})?)\b/i) ??
-    text.match(/\b\$?(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:per|\/)\s*(?:hour|hr)\b/i)
-  const flatAmountMatch = text.match(/\$?(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:flat|fixed|total)\b/i)
-
-  const quantity = quantityMatch ? Number(quantityMatch[1]) : 1
-  const rate = rateMatch
-    ? Number(rateMatch[1].replace(/,/g, ''))
-    : flatAmountMatch
-      ? Number(flatAmountMatch[1].replace(/,/g, ''))
-      : 0
-  const description = titleCaseSentence(cleanLineDescription(text))
-
-  return {
-    description,
-    quantity,
-    rate,
-    amount: quantity * rate,
-    reason: rateMatch
-      ? 'Amountly found a quantity and rate in your note.'
-      : flatAmountMatch
-        ? 'Amountly found a flat amount and treated it as one line item.'
-        : 'Amountly found a description. Add a rate if the amount is missing.',
-  }
+export async function captureInvoiceLineFromText(text: string): Promise<InvoiceLineCaptureResult> {
+  return runAiTask<InvoiceLineCaptureResult>('invoice_line', text)
 }
 
 function getEntryHours(entry: TimeEntry) {
   if (entry.duration_minutes) return Math.max(entry.duration_minutes / 60, 0)
   if (!entry.end_at) return 0
-  const start = parseISO(entry.start_at)
-  const end = parseISO(entry.end_at)
+  const start = new Date(entry.start_at)
+  const end = new Date(entry.end_at)
   return Math.max((end.getTime() - start.getTime()) / 3600000, 0)
-}
-
-function getEntryRate(entry: TimeEntry, fallbackRate = 0) {
-  return entry.billable_rate ?? entry.task?.rate ?? entry.project?.rate ?? fallbackRate
-}
-
-function getEntryDescription(entry: TimeEntry) {
-  const projectName = entry.project?.name
-  const taskName = entry.task?.name
-  const note = entry.notes?.trim()
-
-  if (projectName && taskName) return `${projectName}: ${taskName}`
-  if (projectName) return projectName
-  if (taskName) return taskName
-  if (note) return titleCaseSentence(note)
-  return 'Billable work'
 }
 
 export function getInvoiceableTimeEntries(entries: TimeEntry[]) {
@@ -143,34 +62,29 @@ export function getInvoiceableTimeEntries(entries: TimeEntry[]) {
   ))
 }
 
-export function draftInvoiceLinesFromTimeEntries(entries: TimeEntry[], fallbackRate = 0): TimeInvoiceDraft {
-  const invoiceableEntries = getInvoiceableTimeEntries(entries)
-  const clientIds = Array.from(new Set(
-    invoiceableEntries
-      .map(entry => entry.project?.client_id)
-      .filter((id): id is string => Boolean(id))
-  ))
+export async function draftInvoiceLinesFromTimeEntries(entries: TimeEntry[], fallbackRate = 0): Promise<TimeInvoiceDraft> {
+  const invoiceableEntries = getInvoiceableTimeEntries(entries).slice(0, 8).map((entry) => ({
+    id: entry.id,
+    hours: Number(getEntryHours(entry).toFixed(2)),
+    rate: entry.billable_rate ?? entry.task?.rate ?? entry.project?.rate ?? fallbackRate,
+    notes: entry.notes,
+    project: entry.project ? {
+      name: entry.project.name,
+      client_id: entry.project.client_id,
+    } : null,
+    task: entry.task ? {
+      name: entry.task.name,
+    } : null,
+  }))
 
-  const lineItems = invoiceableEntries.slice(0, 8).map((entry) => {
-    const quantity = Number(getEntryHours(entry).toFixed(2))
-    const rate = getEntryRate(entry, fallbackRate)
-    return {
-      description: getEntryDescription(entry),
-      quantity,
-      rate,
-      amount: quantity * rate,
-      reason: 'Amountly turned an unbilled time entry into an invoice line.',
-    }
+  const result = await runAiTask<Required<TimeInvoiceDraft>>('time_invoice_draft', {
+    fallbackRate,
+    entries: invoiceableEntries,
   })
 
-  const totalHours = lineItems.reduce((sum, item) => sum + item.quantity, 0)
-  const totalAmount = lineItems.reduce((sum, item) => sum + item.amount, 0)
-
   return {
-    lineItems,
-    summary: lineItems.length > 0
-      ? `Amountly found ${totalHours.toFixed(2)} unbilled hours worth ${formatCurrency(totalAmount)}.`
-      : 'No unbilled time entries are ready to invoice.',
-    clientId: clientIds.length === 1 ? clientIds[0] : undefined,
+    lineItems: result.lineItems,
+    summary: result.summary,
+    clientId: result.clientId || undefined,
   }
 }

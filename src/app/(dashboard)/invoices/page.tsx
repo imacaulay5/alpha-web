@@ -224,42 +224,56 @@ export default function InvoicesPage() {
     }
   }
 
-  const handleLineCapture = (text = lineCaptureTextareaRef.current?.value ?? lineCaptureText) => {
-    const captured = captureInvoiceLineFromText(text)
-    const nextLine = {
-      description: captured.description,
-      quantity: captured.quantity,
-      rate: captured.rate,
-      amount: captured.amount,
-    }
-    const hasOnlyEmptyLine =
-      lineItems.length === 1 &&
-      !lineItems[0].description &&
-      lineItems[0].quantity === 1 &&
-      lineItems[0].rate === 0
+  const handleLineCapture = async (text = lineCaptureTextareaRef.current?.value ?? lineCaptureText) => {
+    try {
+      setLineCaptureSummary('Asking Amountly AI...')
+      const captured = await captureInvoiceLineFromText(text)
+      const nextLine = {
+        description: captured.description,
+        quantity: captured.quantity,
+        rate: captured.rate,
+        amount: captured.amount,
+      }
+      const hasOnlyEmptyLine =
+        lineItems.length === 1 &&
+        !lineItems[0].description &&
+        lineItems[0].quantity === 1 &&
+        lineItems[0].rate === 0
 
-    setLineItems(hasOnlyEmptyLine ? [nextLine] : [...lineItems, nextLine])
-    setLineCaptureSummary(captured.reason)
+      setLineItems(hasOnlyEmptyLine ? [nextLine] : [...lineItems, nextLine])
+      setLineCaptureSummary(captured.reason)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI line capture failed'
+      setLineCaptureSummary(message)
+      toast.error(message)
+    }
   }
 
-  const handleDraftFromTime = () => {
-    const draft = draftInvoiceLinesFromTimeEntries(timeEntries, Number(user?.hourly_rate ?? 0))
-    if (draft.lineItems.length === 0) {
+  const handleDraftFromTime = async () => {
+    try {
+      setTimeDraftSummary('Asking Amountly AI...')
+      const draft = await draftInvoiceLinesFromTimeEntries(timeEntries, Number(user?.hourly_rate ?? 0))
+      if (draft.lineItems.length === 0) {
+        setTimeDraftSummary(draft.summary)
+        return
+      }
+
+      const hasOnlyEmptyLine =
+        lineItems.length === 1 &&
+        !lineItems[0].description &&
+        lineItems[0].quantity === 1 &&
+        lineItems[0].rate === 0
+
+      setLineItems(hasOnlyEmptyLine ? draft.lineItems : [...lineItems, ...draft.lineItems])
       setTimeDraftSummary(draft.summary)
-      return
-    }
 
-    const hasOnlyEmptyLine =
-      lineItems.length === 1 &&
-      !lineItems[0].description &&
-      lineItems[0].quantity === 1 &&
-      lineItems[0].rate === 0
-
-    setLineItems(hasOnlyEmptyLine ? draft.lineItems : [...lineItems, ...draft.lineItems])
-    setTimeDraftSummary(draft.summary)
-
-    if (draft.clientId && !formData.client_id && clients.some(client => client.id === draft.clientId)) {
-      setFormData({ ...formData, client_id: draft.clientId })
+      if (draft.clientId && !formData.client_id && clients.some(client => client.id === draft.clientId)) {
+        setFormData({ ...formData, client_id: draft.clientId })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI time draft failed'
+      setTimeDraftSummary(message)
+      toast.error(message)
     }
   }
 
@@ -395,10 +409,17 @@ export default function InvoicesPage() {
     }
   }
 
-  const openReminderDraft = (invoice: Invoice) => {
+  const openReminderDraft = async (invoice: Invoice) => {
     setReminderInvoice(invoice)
-    setReminderDraft(draftInvoiceReminder(invoice))
+    setReminderDraft(null)
     setReminderDialogOpen(true)
+    try {
+      setReminderDraft(await draftInvoiceReminder(invoice))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI reminder draft failed'
+      toast.error(message)
+      setReminderDialogOpen(false)
+    }
   }
 
   // Calculate totals

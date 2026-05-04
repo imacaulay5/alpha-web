@@ -526,22 +526,29 @@ function AccountsPayableView() {
     setBillDialog(true)
   }
 
-  const handleBillLineCapture = (text = billLineCaptureTextareaRef.current?.value ?? billLineCaptureText) => {
-    const captured = captureInvoiceLineFromText(text)
-    const nextLine = {
-      description: captured.description,
-      quantity: captured.quantity,
-      rate: captured.rate,
-      amount: captured.amount,
-    }
-    const hasOnlyEmptyLine =
-      billLines.length === 1 &&
-      !billLines[0].description &&
-      billLines[0].quantity === 1 &&
-      billLines[0].rate === 0
+  const handleBillLineCapture = async (text = billLineCaptureTextareaRef.current?.value ?? billLineCaptureText) => {
+    try {
+      setBillLineCaptureSummary('Asking Amountly AI...')
+      const captured = await captureInvoiceLineFromText(text)
+      const nextLine = {
+        description: captured.description,
+        quantity: captured.quantity,
+        rate: captured.rate,
+        amount: captured.amount,
+      }
+      const hasOnlyEmptyLine =
+        billLines.length === 1 &&
+        !billLines[0].description &&
+        billLines[0].quantity === 1 &&
+        billLines[0].rate === 0
 
-    setBillLines(hasOnlyEmptyLine ? [nextLine] : [...billLines, nextLine])
-    setBillLineCaptureSummary(captured.reason)
+      setBillLines(hasOnlyEmptyLine ? [nextLine] : [...billLines, nextLine])
+      setBillLineCaptureSummary(captured.reason)
+    } catch (error) {
+      const message = getErrorMessage(error, 'AI line capture failed')
+      setBillLineCaptureSummary(message)
+      toast.error(message)
+    }
   }
 
   const handleSaveBill = async (e: React.FormEvent) => {

@@ -39,6 +39,7 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { getQuickActions } from '@/lib/quick-actions'
+import { getDashboardAiInsights } from '@/lib/dashboard-ai'
 import { addDays, differenceInDays, endOfMonth, formatDistanceToNow, isAfter, isBefore, parseISO, startOfMonth } from 'date-fns'
 
 type DashboardStat = {
@@ -806,6 +807,11 @@ export default function DashboardPage() {
   const [closeGuideOpen, setCloseGuideOpen] = useState(false)
   const [activeCloseStepId, setActiveCloseStepId] = useState<string | null>(null)
   const [financialSearchQuery, setFinancialSearchQuery] = useState('')
+  const [dashboardAiInsights, setDashboardAiInsights] = useState<{
+    nextSteps: AiNextStep[]
+    monthlySummary: MonthlySummary
+    searchResults: FinancialSearchResult[]
+  } | null>(null)
 
   const accountType = user?.account_type || AccountType.personal
 
@@ -895,6 +901,34 @@ export default function DashboardPage() {
     }
   }, [])
 
+  useEffect(() => {
+    let isMounted = true
+
+    const loadAiInsights = async () => {
+      try {
+        const insights = await getDashboardAiInsights({
+          accountType,
+          searchQuery: financialSearchQuery,
+          bills: personalBills,
+          expenses: personalExpenses,
+          workData: workDashboardData,
+          candidateHrefs: ['/dashboard', '/bills', '/expenses', '/invoices', '/time-entries', '/tax'],
+        })
+
+        if (isMounted) setDashboardAiInsights(insights)
+      } catch (error) {
+        if (isMounted) setDashboardAiInsights(null)
+        console.error('Failed to load dashboard AI insights:', error)
+      }
+    }
+
+    loadAiInsights()
+
+    return () => {
+      isMounted = false
+    }
+  }, [accountType, financialSearchQuery, personalBills, personalExpenses, workDashboardData])
+
   const getStatsForAccountType = (): DashboardStat[] => {
     switch (accountType) {
       case AccountType.personal:
@@ -914,19 +948,25 @@ export default function DashboardPage() {
     accountType === AccountType.personal
       ? getRecentPersonalActivity(personalBills, personalExpenses)
       : []
-  const aiNextSteps =
+  const localNextSteps =
     accountType === AccountType.personal
       ? getPersonalNextSteps(personalBills, personalExpenses)
       : getSampleNextSteps(accountType)
   const monthlyCloseChecklist = getMonthlyCloseChecklist(accountType, personalBills, personalExpenses)
-  const monthlySummary =
+  const localMonthlySummary =
     accountType === AccountType.personal
       ? getPersonalMonthlySummary(personalBills, personalExpenses)
       : getSampleMonthlySummary(accountType)
-  const financialSearchResults =
+  const localFinancialSearchResults =
     accountType === AccountType.personal
       ? getPersonalFinancialSearchResults(financialSearchQuery, personalBills, personalExpenses)
       : getSampleFinancialSearchResults(financialSearchQuery, accountType)
+  const aiNextSteps = dashboardAiInsights?.nextSteps.length ? dashboardAiInsights.nextSteps : localNextSteps
+  const monthlySummary = dashboardAiInsights?.monthlySummary ?? localMonthlySummary
+  const financialSearchResults =
+    financialSearchQuery.trim() && dashboardAiInsights
+      ? dashboardAiInsights.searchResults
+      : localFinancialSearchResults
   const completedCloseSteps = monthlyCloseChecklist.filter(item => item.done).length
   const monthlyCloseProgress = Math.round((completedCloseSteps / monthlyCloseChecklist.length) * 100)
   const activeCloseStep =

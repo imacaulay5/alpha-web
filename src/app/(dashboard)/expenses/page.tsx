@@ -49,7 +49,7 @@ import { Plus, Receipt, Pencil, Trash2, Loader2, DollarSign, Wand2, Upload } fro
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { formatDateOnly, dateInputValue } from '@/lib/date-format'
-import { captureExpenseFromText, captureReceiptDocumentFromText, getExpenseCategorySuggestionLabel, suggestExpenseCategory } from '@/lib/expense-ai'
+import { captureExpenseFromText, captureReceiptDocumentFromText } from '@/lib/expense-ai'
 
 function getStatusVariant(status: ExpenseStatus): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
@@ -221,53 +221,55 @@ export default function ExpensesPage() {
 
   // Calculate total
   const totalAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0)
-  const categorySuggestion = suggestExpenseCategory({
-    merchant: formData.merchant,
-    description: formData.description,
-    notes: formData.notes,
-  })
-  const shouldShowCategorySuggestion =
-    dialogOpen &&
-    (formData.merchant.trim() || formData.description.trim() || formData.notes.trim()) &&
-    categorySuggestion.category !== formData.category
-  const applyCategorySuggestion = () => {
-    setFormData({ ...formData, category: categorySuggestion.category })
-  }
-  const handleSmartCapture = () => {
-    const result = captureExpenseFromText(smartCaptureText)
-    const nextFormData = {
-      ...formData,
-      amount: result.amount ?? formData.amount,
-      merchant: result.merchant ?? formData.merchant,
-      description: result.description ?? formData.description,
-      expense_date: result.expense_date ?? formData.expense_date,
-      category: result.category,
-    }
+  const handleSmartCapture = async () => {
+    try {
+      setSmartCaptureSummary('Asking Amountly AI...')
+      const result = await captureExpenseFromText(smartCaptureText)
+      const nextFormData = {
+        ...formData,
+        amount: result.amount ?? formData.amount,
+        merchant: result.merchant ?? formData.merchant,
+        description: result.description ?? formData.description,
+        expense_date: result.expense_date ?? formData.expense_date,
+        category: result.category,
+      }
 
-    setFormData(nextFormData)
-    setSmartCaptureSummary(
-      `Filled ${[
-        result.amount ? 'amount' : null,
-        result.merchant ? 'merchant' : null,
-        result.expense_date ? 'date' : null,
-        'category',
-      ]
-        .filter(Boolean)
-        .join(', ')}.`
-    )
+      setFormData(nextFormData)
+      setSmartCaptureSummary(
+        `Filled ${[
+          result.amount ? 'amount' : null,
+          result.merchant ? 'merchant' : null,
+          result.expense_date ? 'date' : null,
+          'category',
+        ]
+          .filter(Boolean)
+          .join(', ')}.`
+      )
+    } catch (error) {
+      const message = getErrorMessage(error, 'AI capture failed')
+      setSmartCaptureSummary(message)
+      toast.error(message)
+    }
   }
-  const handleReceiptExtraction = () => {
-    const result = captureReceiptDocumentFromText(receiptText)
-    setFormData({
-      ...formData,
-      amount: result.amount ?? formData.amount,
-      merchant: result.merchant ?? formData.merchant,
-      description: result.description ?? formData.description,
-      expense_date: result.expense_date ?? formData.expense_date,
-      category: result.category,
-      notes: result.notes ?? formData.notes,
-    })
-    setReceiptSummary(result.summary)
+  const handleReceiptExtraction = async () => {
+    try {
+      setReceiptSummary('Asking Amountly AI...')
+      const result = await captureReceiptDocumentFromText(receiptText)
+      setFormData({
+        ...formData,
+        amount: result.amount ?? formData.amount,
+        merchant: result.merchant ?? formData.merchant,
+        description: result.description ?? formData.description,
+        expense_date: result.expense_date ?? formData.expense_date,
+        category: result.category,
+        notes: result.notes ?? formData.notes,
+      })
+      setReceiptSummary(result.summary)
+    } catch (error) {
+      const message = getErrorMessage(error, 'Receipt extraction failed')
+      setReceiptSummary(message)
+      toast.error(message)
+    }
   }
 
   if (loading) {
@@ -610,38 +612,6 @@ export default function ExpensesPage() {
                   placeholder="Brief description of the expense"
                 />
               </div>
-              {shouldShowCategorySuggestion && (
-                <div className="rounded-lg border bg-primary/5 p-3">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex gap-3">
-                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                        <Wand2 className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium">
-                            Amountly suggests {getExpenseCategorySuggestionLabel(categorySuggestion)}
-                          </p>
-                          <Badge variant="outline">{categorySuggestion.confidence} confidence</Badge>
-                        </div>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {categorySuggestion.reason}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={applyCategorySuggestion}
-                      className="shrink-0 gap-2"
-                    >
-                      <Wand2 className="h-4 w-4" />
-                      Apply
-                    </Button>
-                  </div>
-                </div>
-              )}
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea

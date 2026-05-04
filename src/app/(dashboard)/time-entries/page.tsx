@@ -151,16 +151,23 @@ export default function TimeEntriesPage() {
     setDialogOpen(true)
   }
 
-  const handleSmartTimeCapture = () => {
-    const result = captureTimeEntryFromText(smartTimeTextareaRef.current?.value ?? smartTimeText)
-    setFormData({
-      ...formData,
-      date: result.date,
-      start_time: result.start_time,
-      end_time: result.end_time,
-      notes: result.notes,
-    })
-    setSmartTimeSummary(`${result.reason} Estimated ${formatDuration(result.duration_minutes)}.`)
+  const handleSmartTimeCapture = async () => {
+    try {
+      setSmartTimeSummary('Asking Amountly AI...')
+      const result = await captureTimeEntryFromText(smartTimeTextareaRef.current?.value ?? smartTimeText)
+      setFormData({
+        ...formData,
+        date: result.date,
+        start_time: result.start_time,
+        end_time: result.end_time,
+        notes: result.notes,
+      })
+      setSmartTimeSummary(`${result.reason} Estimated ${formatDuration(result.duration_minutes)}.`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI time capture failed'
+      setSmartTimeSummary(message)
+      toast.error(message)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

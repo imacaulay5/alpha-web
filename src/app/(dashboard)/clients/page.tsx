@@ -132,21 +132,28 @@ export default function ClientsPage() {
     setDialogOpen(true)
   }
 
-  const handleSmartContactCapture = () => {
-    const result = captureContactFromText(smartContactTextareaRef.current?.value ?? smartContactText)
-    setFormData({
-      ...formData,
-      name: result.name ?? formData.name,
-      contact_name: result.contact_name ?? formData.contact_name,
-      email: result.email ?? formData.email,
-      phone: result.phone ?? formData.phone,
-      address: result.address ?? formData.address,
-      city: result.city ?? formData.city,
-      state: result.state ?? formData.state,
-      zip_code: result.zip_code ?? formData.zip_code,
-      notes: formData.notes || result.notes || '',
-    })
-    setSmartContactSummary(result.reason)
+  const handleSmartContactCapture = async () => {
+    try {
+      setSmartContactSummary('Asking Amountly AI...')
+      const result = await captureContactFromText(smartContactTextareaRef.current?.value ?? smartContactText)
+      setFormData({
+        ...formData,
+        name: result.name ?? formData.name,
+        contact_name: result.contact_name ?? formData.contact_name,
+        email: result.email ?? formData.email,
+        phone: result.phone ?? formData.phone,
+        address: result.address ?? formData.address,
+        city: result.city ?? formData.city,
+        state: result.state ?? formData.state,
+        zip_code: result.zip_code ?? formData.zip_code,
+        notes: formData.notes || result.notes || '',
+      })
+      setSmartContactSummary(result.reason)
+    } catch (error) {
+      const message = getErrorMessage(error, 'AI contact capture failed')
+      setSmartContactSummary(message)
+      toast.error(message)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
