@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp'
 import { Label } from '@/components/ui/label'
 
-const OTP_LENGTH = 6
+const OTP_LENGTH = 8
 const VERIFICATION_TYPES = ['signup', 'email', 'magiclink', 'recovery', 'invite', 'email_change'] as const
 
 type VerificationType = (typeof VERIFICATION_TYPES)[number]
@@ -74,7 +74,7 @@ function VerifyPageContent() {
     }
 
     if (code.length !== OTP_LENGTH) {
-      setError('Enter the 6-digit verification code.')
+      setError(`Enter the ${OTP_LENGTH}-digit verification code.`)
       return
     }
 
@@ -122,7 +122,7 @@ function VerifyPageContent() {
         </div>
         <CardTitle className="text-2xl font-bold">Verify your email</CardTitle>
         <CardDescription>
-          Enter the 6-digit code from your email, or open the link we sent and we&apos;ll finish verification automatically.
+          Enter the {OTP_LENGTH}-digit code from your email, or open the link we sent and we&apos;ll finish verification automatically.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
